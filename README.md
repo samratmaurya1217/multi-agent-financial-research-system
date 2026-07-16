@@ -2,8 +2,8 @@
 
 [![React](https://img.shields.io/badge/React-18.0+-blue.svg)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-AI%20Orchestration-orange.svg)](https://python.langchain.com/docs/langgraph)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas%20Vector%20Search-success.svg)](https://mongodb.com/)
+[![LangGraph](<https://img.shields.io/badge/LangGraph-AI%20Orchestration-orange.svg>)](https://python.langchain.com/docs/langgraph)
+[![MongoDB](<https://img.shields.io/badge/MongoDB-Atlas%20Vector%20Search-success.svg>)](https://mongodb.com/)
 [![Python](https://img.shields.io/badge/Python-3.10+-yellow.svg)](https://python.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-purple.svg)](https://openai.com/)
 
@@ -14,11 +14,13 @@
 ## 🌟 Key Features
 
 ### 📄 Intelligent Document Ingestion & Parsing
+
 - **Multi-Format Support** — Upload financial filings in PDF, DOCX, and TXT formats (up to 50MB).
 - **Advanced OCR & Chunking** — Page-boundary aware text extraction with automatic OCR fallback for scanned documents.
 - **Semantic Vector Indexing** — Automated embedding generation and vector indexing using MongoDB Atlas Vector Search for precise retrieval.
 
 ### 🤖 Multi-Agent Intelligence
+
 - **6 Specialized Agents** — Document, Extraction, Red Flag, Comparison, Research, and Report Agents.
 - **Metric Extraction Engine** — Automatically pulls revenue, EBITDA, EPS, and other key ratios with exact source citations.
 - **Red Flag Classifier** — Detects and categorizes risks (Liquidity, Profitability, Governance) with low-to-critical severity levels.
@@ -26,12 +28,14 @@
 - **Automated Report Generation** — Compiles cross-agent analytics into structured, analyst-style PDF reports.
 
 ### ⚙️ Orchestration & State Management
+
 - **Event-Driven Pipelines** — Pipeline triggers automatically upon document upload without blocking the UI.
 - **Durable Handoffs** — Stateful LangGraph orchestrator ensures intermediate agent outputs are persisted in MongoDB.
 - **Fault Tolerance & Recovery** — Bounded retry policies, exponential backoff, and graceful degradation strategies for LLM timeouts.
 - **Tool Registry Access** — Agents are restricted to specific capability-based tools (e.g., `vector_search`, `pdf_parse`, `schema_validate`).
 
 ### 🔒 Security, Trust & Grounding
+
 - **Strict Source Grounding** — The system guarantees every insight is backed by a specific page/chunk in the source documents.
 - **Zero-Tolerance Hallucination Checks** — The Research Agent refuses to answer if relevant source material is unavailable.
 - **Prompt Injection Defense** — Rigorous input validation before expensive LLM calls.
@@ -81,14 +85,14 @@ graph TB
     SRV --> ORC
     SRV --> AUTH
     SRV --> VAL
-    
+  
     ORC --> AGT
     AGT --> OAI
     AGT --> TL
-    
+  
     SRV --> RED
     RED --> ORC
-    
+  
     ORC --> MDB
     AGT --> MDB
     AGT --> VDB
@@ -107,12 +111,12 @@ flowchart LR
         A1[Document Agent] -->|Parses & Indexes| A2[Extraction Agent]
         A2 -->|Extracts Metrics| A3[Red Flag Agent]
     end
-    
+  
     subgraph AdHoc["Ad-Hoc / User-Triggered"]
         B1[Comparison Agent]
         B2[Research Agent]
     end
-    
+  
     subgraph Export["Output Pipeline"]
         C1[Report Agent]
     end
@@ -133,18 +137,18 @@ Agent orchestration relies on stateful graphs to manage durable handoffs, retrie
 stateDiagram-v2
     [*] --> IngestionTriggered
     IngestionTriggered --> DocumentAgent
-    
+  
     DocumentAgent --> ExtractionAgent : Document Parsed & Indexed
     DocumentAgent --> Failed : Parsing Error
-    
+  
     ExtractionAgent --> RedFlagAgent : Metrics Persisted
     ExtractionAgent --> RedFlagAgent : Partial Failure (Degraded)
-    
+  
     RedFlagAgent --> PipelineComplete : Flags Detected & Persisted
-    
+  
     PipelineComplete --> [*]
     Failed --> [*]
-    
+  
     state ExtractionAgent {
         [*] --> ExtractMetrics
         ExtractMetrics --> ValidateCitations
@@ -158,6 +162,7 @@ stateDiagram-v2
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - **Python 3.10+** (Backend API & Workers)
 - **Node.js 18+** (Frontend React App)
 - **MongoDB** (State and Vector Database)
