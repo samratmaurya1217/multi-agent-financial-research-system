@@ -121,10 +121,6 @@ flowchart LR
     A2 -.-> C1
     A3 -.-> C1
     B1 -.-> C1
-    
-    style Pipeline fill:#f0f4ff,stroke:#0033cc
-    style AdHoc fill:#fff0f5,stroke:#cc0066
-    style Export fill:#f5fff0,stroke:#33cc00
 ```
 
 ---
