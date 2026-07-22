@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from api.routes.upload import router as upload_router
+from api.routes.workspace import router as workspace_router
 
 
 app = FastAPI(
@@ -12,6 +13,12 @@ app.include_router(
     upload_router,
     prefix="/docs",
     tags=["Documents"])
+
+app.include_router(
+    workspace_router,
+    prefix="/workspace",
+    tags=["Workspace"]
+)
 
 @app.get("/")
 def home():
