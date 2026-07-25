@@ -1,7 +1,10 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field 
+from dotenv import load_dotenv
 import uuid
 import os
+
+load_dotenv()  # Load environment variables from .env file
 
 app = FastAPI(title="Multi-Agent Financial Research System")
 SESSIONS_DB = {}
@@ -29,7 +32,11 @@ def create_session(payload: SessionCreate):
 
 
 from app.agents.document_agent import DocumentAgent
+from app.agents.extraction_agent import ExtractionAgent
+from app.agents.red_flag_agent import RedFlagAgent
 doc_agent_engine = DocumentAgent()
+ext_agent_engine = ExtractionAgent(groq_api_key=os.getenv("GROQ_API_KEY"))
+red_flag_agent_engine = RedFlagAgent(groq_api_key=os.getenv("GROQ_API_KEY"))
 
 @app.post("/api/v1/sessions/{session_id}/upload")
 async def upload_financial_document(
@@ -64,7 +71,38 @@ async def upload_financial_document(
         "session_state": SESSIONS_DB[session_id]
     }
 
+@app.post("/api/v1/sessions/{session_id}/extract")
+def extract_financials(session_id: str, company_name: str = Form(...)):
+    if session_id not in SESSIONS_DB:
+        raise HTTPException(status_code=404, detail="Workspace session not found.")
 
+    # pull relevant chunks back out of the vector store for this company/session
+    retrieved_text = doc_agent_engine.get_context_for_company(
+        session_id=session_id,
+        company_name=company_name
+    )
+
+    if not retrieved_text:
+        raise HTTPException(status_code=404, detail="No indexed content found for this company.")
+
+    result = ext_agent_engine.extract_financial_data(retrieved_text)
+    return {"company": company_name, "extracted_data": result}
+
+@app.post("/api/v1/sessions/{session_id}/red-flags")
+def analyze_red_flags(session_id: str, company_name: str = Form(...)):
+    if session_id not in SESSIONS_DB:
+        raise HTTPException(status_code=404, detail="Workspace session not found.")
+
+    retrieved_text = doc_agent_engine.get_context_for_company(
+        session_id=session_id,
+        company_name=company_name
+    )
+
+    if not retrieved_text:
+        raise HTTPException(status_code=404, detail="No indexed content found for this company.")
+
+    result = red_flag_agent_engine.analyze_red_flags(retrieved_text)
+    return {"company": company_name, "red_flag_report": result}
 
     #what i have done in this code... 
     #firstly, fastapi imported for working for backend... basemodel is for making sure that input contains str... if not neglected... 
