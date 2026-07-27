@@ -25,7 +25,6 @@ import {
   Bell,
   LogOut,
   Building2,
-  ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
   Users,
@@ -44,15 +43,6 @@ function FinSightLogo({ size = 24 }: { size?: number }) {
       className="rounded-md bg-gradient-to-br from-indigo-500 to-rose-500 flex-shrink-0"
       style={{ width: size, height: size }}
     />
-  );
-}
-
-function BrandBadge() {
-  return (
-    <div className="flex items-center gap-2.5 px-1 py-1 w-full">
-      <FinSightLogo size={24} />
-      <span className="text-[15px] font-semibold text-white tracking-tight">FinSight</span>
-    </div>
   );
 }
 

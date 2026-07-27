@@ -31,6 +31,17 @@ export async function apiDelete(path: string): Promise<void> {
   if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
 }
 
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`UPLOAD ${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 export function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
+
