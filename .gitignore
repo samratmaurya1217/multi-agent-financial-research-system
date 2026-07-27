@@ -1,1 +1,43 @@
+# ─── Secrets (NEVER commit these) ────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# Keep .env.example files (they contain no real secrets)
+!.env.example
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+env/
+*.egg
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+dist/
+.cache/
+*.local
+
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
+
+# ─── Project-specific ─────────────────────────────────────────────────────────
+backend/uploaded_filings/
+backend/chroma_db/
+backend/__pycache__/
+
+# ─── SAD (large binary) ───────────────────────────────────────────────────────
 Multi-Agent_Financial_Research_System_SAD (5).md

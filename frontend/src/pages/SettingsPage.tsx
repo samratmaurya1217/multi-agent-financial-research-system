@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { useAuth } from "@/store/authStore";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Settings, User, Bell, Shield, Key, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,12 +16,19 @@ const TABS: { id: Tab; label: string; icon: typeof Settings }[] = [
   { id: "danger",        label: "Danger Zone",   icon: AlertTriangle },
 ];
 
-function InputRow({ label, value, type = "text" }: { label: string; value: string; type?: string }) {
+function InputRow({ label, value, type = "text", disabled = false }: { label: string; value: string; type?: string; disabled?: boolean }) {
+  const [val, setVal] = useState(value);
   return (
     <div className="grid md:grid-cols-3 gap-4 items-center py-4 border-t border-white/[0.04]">
       <label className="text-sm font-medium text-white/60">{label}</label>
       <div className="md:col-span-2">
-        <input type={type} defaultValue={value} className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-sm focus:outline-none focus:border-indigo-500/60 transition-all" />
+        <input
+          type={type}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          disabled={disabled}
+          className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-sm focus:outline-none focus:border-indigo-500/60 transition-all disabled:opacity-50"
+        />
       </div>
     </div>
   );
@@ -41,6 +50,7 @@ function ToggleRow({ label, desc, defaultChecked = false }: { label: string; des
 }
 
 export function SettingsPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("account");
 
   return (
@@ -71,9 +81,18 @@ export function SettingsPage() {
               {activeTab === "account" && (
                 <>
                   <h3 className="text-white font-semibold mb-4">Account Information</h3>
-                  <InputRow label="Full Name" value="Samrat Maurya" />
-                  <InputRow label="Email" value="samrat@finsight.ai" type="email" />
-                  <InputRow label="Organization" value="FinSight Research" />
+                  <InputRow label="Full Name" value={user?.name || "Samrat Maurya"} />
+                  <InputRow label="Email" value={user?.email || "s.sam.11221177@gmail.com"} type="email" disabled />
+                  <InputRow label="Role / Plan" value={user?.role || "Analyst Plan"} />
+                  
+                  <div className="flex items-center justify-between py-4 border-t border-white/[0.04]">
+                    <div>
+                      <p className="text-sm font-medium text-white/80">Interface Theme</p>
+                      <p className="text-xs text-white/40 mt-0.5">Toggle between Dark and Light mode</p>
+                    </div>
+                    <ThemeToggle />
+                  </div>
+
                   <div className="pt-4 border-t border-white/[0.04] mt-2">
                     <button className="px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-rose-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity">Save Changes</button>
                   </div>
@@ -109,7 +128,7 @@ export function SettingsPage() {
               {activeTab === "api" && (
                 <>
                   <h3 className="text-white font-semibold mb-2">API Keys</h3>
-                  <p className="text-white/40 text-sm mb-6">API access is available on the Team plan. These keys allow programmatic access to the FinSight API.</p>
+                  <p className="text-white/40 text-sm mb-6">API access is available on the Team plan. These keys allow programmatic access to the Velsora API.</p>
                   <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-400 text-sm mb-4">
                     API key management requires backend integration. Available when FastAPI backend is connected.
                   </div>

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { CitationChip } from "@/components/CitationChip";
-import { getMessages, sendMessage, type ChatMessage } from "@/services/research";
+import { getMessages, getSessions, sendMessage, type ChatMessage } from "@/services/research";
+import { getDocuments, type Document } from "@/services/documents";
+import { getWorkspaces } from "@/services/workspace";
 import { MessageSquare, Send, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,35 +16,80 @@ const SUGGESTED = [
   "Are there any going concern warnings?",
 ];
 
-const MOCK_DOCS = [
-  { id: "doc_01", name: "AAPL_10K_FY2024.pdf", pages: 128 },
-  { id: "doc_02", name: "AAPL_Q3_2024_Earnings.pdf", pages: 32 },
-];
-
 export function ChatPage() {
+  const { workspaceId: paramWorkspaceId } = useParams<{ workspaceId?: string }>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [docs, setDocs] = useState<Document[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<string>(paramWorkspaceId || "");
+  const [sessionId, setSessionId] = useState<string>("");
+  const [sessionTitle, setSessionTitle] = useState("Research Session");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Load workspace, documents, and existing conversation on mount
   useEffect(() => {
-    getMessages("sess_01").then((msgs) => { setMessages(msgs); setLoading(false); });
-  }, []);
+    async function init() {
+      try {
+        // Determine which workspace to use
+        let wsId = paramWorkspaceId || "";
+        if (!wsId) {
+          const workspaces = await getWorkspaces();
+          wsId = workspaces[0]?.workspace_id || "ws_apple2024";
+        }
+        setWorkspaceId(wsId);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+        // Load documents for the workspace
+        const wsDocs = await getDocuments(wsId);
+        setDocs(wsDocs);
+
+        // Load most recent conversation or create new
+        const sessions = await getSessions(wsId);
+        if (sessions.length > 0) {
+          const latest = sessions[0];
+          setSessionId(latest.conversation_id);
+          setSessionTitle(latest.title || "Research Session");
+          const msgs = await getMessages(latest.conversation_id);
+          setMessages(msgs);
+        } else {
+          // No sessions yet — start fresh
+          setSessionId(`conv_${Date.now()}`);
+        }
+      } catch (err) {
+        console.error("Chat init error:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, [paramWorkspaceId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const submit = async (text?: string) => {
     const content = text ?? input;
     if (!content.trim() || sending) return;
     setInput("");
-    const userMsg: ChatMessage = { id: `u_${Date.now()}`, role: "user", content, createdAt: new Date().toISOString() };
+    const userMsg: ChatMessage = {
+      id: `u_${Date.now()}`,
+      role: "user",
+      content,
+      createdAt: new Date().toISOString(),
+    };
     setMessages((prev) => [...prev, userMsg]);
     setSending(true);
-    const reply = await sendMessage("sess_01", content);
-    setMessages((prev) => [...prev, reply]);
-    setSending(false);
+    try {
+      const reply = await sendMessage(sessionId, content, workspaceId);
+      setMessages((prev) => [...prev, reply]);
+    } catch (err) {
+      console.error("Send message error:", err);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -59,22 +107,41 @@ export function ChatPage() {
               className="flex-shrink-0 border-r border-white/[0.06] bg-[#050505] overflow-hidden flex flex-col"
             >
               <div className="px-4 py-4 border-b border-white/[0.06]">
-                <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-3">Source Documents</p>
-                <div className="space-y-2">
-                  {MOCK_DOCS.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-                      <FileText className="h-4 w-4 text-indigo-400 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm text-white/70 truncate">{doc.name}</p>
-                        <p className="text-xs text-white/30">{doc.pages} pages</p>
+                <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-3">
+                  Source Documents
+                </p>
+                {loading ? (
+                  <div className="space-y-2">
+                    {[0, 1].map((i) => (
+                      <div key={i} className="h-14 rounded-xl bg-white/[0.04] animate-pulse" />
+                    ))}
+                  </div>
+                ) : docs.length === 0 ? (
+                  <p className="text-xs text-white/30">No documents uploaded yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {docs.map((doc) => (
+                      <div
+                        key={doc.document_id}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06]"
+                      >
+                        <FileText className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm text-white/70 truncate">{doc.filename}</p>
+                          <p className="text-xs text-white/30">
+                            {doc.total_pages ? `${doc.total_pages} pages` : doc.file_type.toUpperCase()}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="px-4 py-4">
-                <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-3">Session</p>
-                <p className="text-sm text-white/40">AAPL Revenue Analysis</p>
+                <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-3">
+                  Session
+                </p>
+                <p className="text-sm text-white/40 truncate">{sessionTitle}</p>
                 <p className="text-xs text-white/25 mt-1">{messages.length} messages</p>
               </div>
             </motion.aside>
@@ -85,15 +152,22 @@ export function ChatPage() {
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
           <div className="h-14 border-b border-white/[0.06] flex items-center px-4 gap-3 flex-shrink-0">
-            <button onClick={() => setSourcesOpen((v) => !v)} className="h-8 w-8 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.04] transition-colors">
-              {sourcesOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <button
+              onClick={() => setSourcesOpen((v) => !v)}
+              className="h-8 w-8 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.04] transition-colors"
+            >
+              {sourcesOpen ? (
+                <ChevronLeft className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
             </button>
             <div className="h-7 w-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
               <MessageSquare className="h-4 w-4 text-indigo-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-white">AAPL Revenue Analysis</p>
-              <p className="text-xs text-white/30">2 source documents indexed</p>
+              <p className="text-sm font-medium text-white">{sessionTitle}</p>
+              <p className="text-xs text-white/30">{docs.length} source document{docs.length !== 1 ? "s" : ""} indexed</p>
             </div>
           </div>
 
@@ -103,7 +177,12 @@ export function ChatPage() {
               <div className="flex items-center justify-center h-full">
                 <div className="flex gap-1">
                   {[0, 1, 2].map((i) => (
-                    <motion.div key={i} className="h-2 w-2 rounded-full bg-indigo-500/60" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />
+                    <motion.div
+                      key={i}
+                      className="h-2 w-2 rounded-full bg-indigo-500/60"
+                      animate={{ y: [0, -6, 0] }}
+                      transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
+                    />
                   ))}
                 </div>
               </div>
@@ -115,30 +194,58 @@ export function ChatPage() {
                       <MessageSquare className="h-7 w-7 text-indigo-400" />
                     </div>
                     <h3 className="text-white font-semibold mb-2">Ask anything about your documents</h3>
-                    <p className="text-white/40 text-sm mb-6 max-w-md">Every answer is grounded in your source documents with exact citations.</p>
+                    <p className="text-white/40 text-sm mb-6 max-w-md">
+                      Every answer is grounded in your source documents with exact citations.
+                    </p>
                     <div className="grid sm:grid-cols-2 gap-2 max-w-lg w-full">
                       {SUGGESTED.map((q) => (
-                        <button key={q} onClick={() => submit(q)} className="text-left px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] text-sm text-white/60 hover:text-white transition-all">{q}</button>
+                        <button
+                          key={q}
+                          onClick={() => submit(q)}
+                          className="text-left px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] text-sm text-white/60 hover:text-white transition-all"
+                        >
+                          {q}
+                        </button>
                       ))}
                     </div>
                   </div>
                 )}
                 {messages.map((msg) => (
-                  <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
-                    <div className={cn("max-w-[75%] space-y-2", msg.role === "user" ? "items-end flex flex-col" : "")}>
-                      <div className={cn("px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-line",
-                        msg.role === "user"
-                          ? "bg-indigo-500/20 border border-indigo-500/30 text-white rounded-br-sm"
-                          : "bg-white/[0.04] border border-white/[0.08] text-white/80 rounded-bl-sm"
-                      )}>
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}
+                  >
+                    <div
+                      className={cn(
+                        "max-w-[75%] space-y-2",
+                        msg.role === "user" ? "items-end flex flex-col" : ""
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-line",
+                          msg.role === "user"
+                            ? "bg-indigo-500/20 border border-indigo-500/30 text-white rounded-br-sm"
+                            : "bg-white/[0.04] border border-white/[0.08] text-white/80 rounded-bl-sm"
+                        )}
+                      >
                         {msg.content}
                       </div>
                       {msg.citations && msg.citations.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
-                          {msg.citations.map((c, i) => <CitationChip key={i} citation={c} />)}
+                          {msg.citations.map((c, i) => (
+                            <CitationChip key={i} citation={c} />
+                          ))}
                         </div>
                       )}
-                      <p className="text-xs text-white/20 px-1">{new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                      <p className="text-xs text-white/20 px-1">
+                        {new Date(msg.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
                     </div>
                   </motion.div>
                 ))}
@@ -146,7 +253,12 @@ export function ChatPage() {
                   <div className="flex justify-start">
                     <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-white/[0.04] border border-white/[0.08] flex items-center gap-1.5">
                       {[0, 1, 2].map((i) => (
-                        <motion.div key={i} className="h-1.5 w-1.5 rounded-full bg-white/40" animate={{ y: [0, -4, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }} />
+                        <motion.div
+                          key={i}
+                          className="h-1.5 w-1.5 rounded-full bg-white/40"
+                          animate={{ y: [0, -4, 0] }}
+                          transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+                        />
                       ))}
                     </div>
                   </div>
@@ -162,7 +274,12 @@ export function ChatPage() {
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
                 placeholder="Ask a question about your documents... (Enter to send)"
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 outline-none resize-none max-h-32"
@@ -175,7 +292,9 @@ export function ChatPage() {
                 <Send className="h-4 w-4 text-white" />
               </button>
             </div>
-            <p className="text-xs text-white/20 mt-2 text-center">Answers are grounded in your documents. Every claim includes a source citation.</p>
+            <p className="text-xs text-white/20 mt-2 text-center">
+              Answers are grounded in your documents. Every claim includes a source citation.
+            </p>
           </div>
         </div>
       </div>

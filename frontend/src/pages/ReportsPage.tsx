@@ -3,12 +3,12 @@ import { motion } from "framer-motion";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { StatusBadge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getReports, downloadReport, type Report } from "@/services/reports";
+import { getReports, downloadReport, generateReport, type Report } from "@/services/reports";
+import { getWorkspaces } from "@/services/workspace";
 import { FileText, Download, Plus, ExternalLink, Clock } from "lucide-react";
 
-const TABS = ["Executive Summary", "Financials", "Red Flags", "Outlook"];
 
-const EXEC_SUMMARY = `Apple Inc. delivered solid results in FY2024 with total net sales of $391.0 billion (+2.0% YoY), driven by continued strength in Services (+13%), which reached $96.2 billion and now represents 25% of total revenue. Products revenue was relatively flat at $294.9B, constrained by maturation in iPhone and a softening Mac market.\n\nOperating income reached $123.2B (operating margin: 31.5%), and net income came in at $93.7B ($6.11 diluted EPS). Free cash flow remained exceptional at $108.8B, supporting continued share buybacks ($90.2B repurchased in FY2024).`;
+
 
 export function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
@@ -18,21 +18,52 @@ export function ReportsPage() {
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
-    getReports("ws_01").then((r) => {
-      setReports(r); setLoading(false);
-      if (r.length > 0) setSelected(r[0]);
-    });
+    async function loadReports() {
+      try {
+        // Load reports from all workspaces
+        const workspaces = await getWorkspaces();
+        const allReports: Report[] = [];
+        for (const ws of workspaces) {
+          try {
+            const rpts = await getReports(ws.workspace_id);
+            allReports.push(...rpts);
+          } catch {
+            // skip failed workspace
+          }
+        }
+        // Sort by most recently generated
+        allReports.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
+        setReports(allReports);
+        if (allReports.length > 0) setSelected(allReports[0]);
+      } catch (err) {
+        console.error("Reports load error:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReports();
   }, []);
 
   const handleDownload = async (id: string) => {
     await downloadReport(id);
-    alert("PDF download would begin here (backend integration pending).");
   };
 
   const handleGenerate = async () => {
     setGenerating(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    setGenerating(false);
+    try {
+      const workspaces = await getWorkspaces();
+      const wsId = workspaces[0]?.workspace_id || "ws_default";
+      const newReport = await generateReport(wsId, [], {
+        target_company: workspaces[0]?.name || "Company",
+        type: "single",
+      });
+      setReports((prev) => [newReport, ...prev]);
+      setSelected(newReport);
+    } catch (err) {
+      console.error("Generate report error:", err);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -102,7 +133,7 @@ export function ReportsPage() {
                   </div>
                   {/* Tabs */}
                   <div className="flex gap-1 mt-4 overflow-x-auto">
-                    {TABS.filter((t) => selected.sections.includes(t)).map((tab, i) => (
+                    {(selected.sections || []).map((tab: string, i: number) => (
                       <button key={tab} onClick={() => setActiveTab(i)} className={`px-3 py-1.5 rounded-lg text-sm transition-colors whitespace-nowrap ${activeTab === i ? "bg-white/[0.08] text-white" : "text-white/40 hover:text-white"}`}>
                         {tab}
                       </button>
@@ -111,10 +142,17 @@ export function ReportsPage() {
                 </div>
                 {/* Content */}
                 <div className="px-6 py-5">
-                  <div className="text-sm text-white/60 leading-relaxed whitespace-pre-line">{EXEC_SUMMARY}</div>
+                  <div className="text-sm text-white/60 leading-relaxed whitespace-pre-line">
+                    <p className="mb-3"><strong className="text-white">{selected.title}</strong></p>
+                    <p className="mb-2">Companies analyzed: <span className="text-white/80">{selected.companyNames.join(" · ")}</span></p>
+                    <p className="mb-2">Report type: <span className="text-white/80 capitalize">{selected.type}</span></p>
+                    <p className="mb-2">Pages: <span className="text-white/80">{selected.pageCount || "N/A"}</span></p>
+                    <p className="mb-4">Sections: <span className="text-white/80">{selected.sections.join(", ")}</span></p>
+                    <p>Status: <span className={selected.status === "ready" ? "text-emerald-400" : "text-yellow-400"}>{selected.status}</span></p>
+                  </div>
                   <div className="mt-4 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 flex items-start gap-2">
                     <FileText className="h-4 w-4 text-indigo-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-indigo-300">All figures are sourced from <strong>AAPL_10K_FY2024.pdf</strong> (pages 24–28, 47–52). Click any number to view the source excerpt.</p>
+                    <p className="text-xs text-indigo-300">This report was generated from workspace documents indexed in the Velsora system. Generated at {new Date(selected.generatedAt).toLocaleString()}.</p>
                   </div>
                 </div>
               </motion.div>

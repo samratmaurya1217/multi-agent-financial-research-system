@@ -1,4 +1,4 @@
-# DESIGN.md — FinSight Frontend Design System
+# DESIGN.md — Velsora Frontend Design System
 
 > **Single source of truth for all UI decisions in this project.**
 > Every page, every component, every pixel should be consistent with this document.
@@ -9,7 +9,7 @@
 
 | Attribute | Value |
 |---|---|
-| **Product Name** | FinSight |
+| **Product Name** | Velsora |
 | **Tagline** | Elevate Your Financial Research |
 | **Logo Mark** | 6×6 rounded square, gradient `from-indigo-500 to-rose-500` |
 | **Personality** | Precise · Professional · Intelligent · Trustworthy |
@@ -19,7 +19,7 @@
 
 ## Product Vision
 
-FinSight is a web-based financial research assistant for **finance students, MBA candidates, and early-career analysts**. It automatically extracts metrics, detects red flags, compares companies, and provides citation-backed conversational research. The UI must communicate precision, speed, and trustworthiness without exposing technical implementation details.
+Velsora is a web-based financial research assistant for **finance students, MBA candidates, and early-career analysts**. It automatically extracts metrics, detects red flags, compares companies, and provides citation-backed conversational research. The UI must communicate precision, speed, and trustworthiness without exposing technical implementation details.
 
 ---
 

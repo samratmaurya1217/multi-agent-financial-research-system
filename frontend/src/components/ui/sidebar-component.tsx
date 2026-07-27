@@ -37,7 +37,7 @@ const softSpring = "cubic-bezier(0.25, 1.1, 0.4, 1)";
 
 /* ─── Brand ─────────────────────────────────────────────────────────────── */
 
-function FinSightLogo({ size = 24 }: { size?: number }) {
+function VelsoraLogo({ size = 24 }: { size?: number }) {
   return (
     <div
       className="rounded-md bg-gradient-to-br from-indigo-500 to-rose-500 flex-shrink-0"
@@ -423,7 +423,7 @@ function IconRail({
     <aside className="flex flex-col items-center gap-1.5 w-[56px] min-w-[56px] h-full bg-[#050505] border-r border-white/[0.06] py-4 px-1.5">
       {/* Logo */}
       <div className="flex items-center justify-center h-10 w-10 mb-2">
-        <FinSightLogo size={22} />
+        <VelsoraLogo size={22} />
       </div>
 
       {/* Main nav */}
@@ -609,11 +609,11 @@ function DetailPanel({
       )}>
         {!isCollapsed && (
           <div className="flex items-center gap-2 min-w-0">
-            <FinSightLogo size={20} />
-            <span className="text-[14px] font-semibold text-white truncate">FinSight</span>
+            <VelsoraLogo size={20} />
+            <span className="text-[14px] font-semibold text-white truncate">Velsora</span>
           </div>
         )}
-        {isCollapsed && <FinSightLogo size={20} />}
+        {isCollapsed && <VelsoraLogo size={20} />}
         <button
           onClick={() => setIsCollapsed((v) => !v)}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}

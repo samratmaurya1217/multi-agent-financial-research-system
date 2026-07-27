@@ -11,4 +11,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    headers: {
+      // Allow Firebase Google Sign-In popup to communicate back
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
+  },
 })

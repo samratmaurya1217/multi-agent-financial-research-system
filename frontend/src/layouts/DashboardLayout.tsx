@@ -1,6 +1,7 @@
 import { useAuth } from "@/store/authStore";
 import { Bell } from "lucide-react";
 import { TwoLevelSidebar } from "@/components/ui/sidebar-component";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -13,7 +14,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="h-16 flex-shrink-0 border-b border-white/[0.06] bg-[#030303]/80 backdrop-blur-xl flex items-center justify-end px-6 gap-3 relative z-10">
+        <header className="h-16 flex-shrink-0 border-b border-white/[0.06] bg-[#030303]/80 backdrop-blur-xl flex items-center justify-end px-6 gap-4 relative z-10">
+          <ThemeToggle />
           <button className="h-9 w-9 rounded-xl border border-white/[0.08] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.04] transition-colors relative">
             <Bell className="h-4 w-4" />
             <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />

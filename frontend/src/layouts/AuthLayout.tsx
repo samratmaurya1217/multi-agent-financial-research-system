@@ -1,8 +1,14 @@
 import { Link } from "react-router-dom";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#030303] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Top right theme toggle */}
+      <div className="absolute top-6 right-6 z-20">
+        <ThemeToggle />
+      </div>
+
       {/* Ambient glow */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.05] via-transparent to-rose-500/[0.05] blur-3xl pointer-events-none" />
 
@@ -10,7 +16,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 justify-center mb-8">
           <div className="h-7 w-7 rounded-md bg-gradient-to-br from-indigo-500 to-rose-500" />
-          <span className="text-lg font-semibold text-white tracking-tight">FinSight</span>
+          <span className="text-lg font-semibold text-white tracking-tight">Velsora</span>
         </Link>
 
         {/* Card */}
@@ -19,7 +25,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <p className="text-center text-xs text-white/20 mt-6">
-          © {new Date().getFullYear()} FinSight. Precision financial research.
+          © {new Date().getFullYear()} Velsora. Precision financial research.
         </p>
       </div>
     </div>

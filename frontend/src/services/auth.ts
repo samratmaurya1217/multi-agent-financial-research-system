@@ -1,4 +1,12 @@
-import { sleep, apiPost, apiGet, USE_MOCK } from "./api";
+import { apiPost, apiGet } from "./api";
+import {
+  auth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  googleProvider,
+  signOut,
+} from "./firebase";
 
 export interface AuthUser {
   // Official SAD Section 14.4 properties
@@ -11,16 +19,20 @@ export interface AuthUser {
   id: string;
   name: string;
   avatarInitials: string;
+  workspaceId?: string;
 }
 
 export interface LoginPayload { email: string; password: string; }
 export interface RegisterPayload { name: string; email: string; password: string; }
 
 export function normalizeUser(data: any): AuthUser {
-  const user_id = data.user_id || data.id || "usr_01";
-  const email = data.email || "user@example.com";
-  const name = data.name || email.split("@")[0] || "User";
-  const avatarInitials = data.avatarInitials || name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) || "U";
+  const user_id = data.user_id || data.id || data.firebaseUid || "usr_01";
+  const email = data.email || "user@velsora.ai";
+  const name = data.name || data.displayName || email.split("@")[0] || "User";
+  const avatarInitials =
+    data.avatarInitials ||
+    name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) ||
+    "U";
 
   return {
     ...data,
@@ -31,55 +43,66 @@ export function normalizeUser(data: any): AuthUser {
     id: user_id,
     name,
     avatarInitials,
+    workspaceId: data.workspaceId,
   };
 }
 
-const MOCK_USER: AuthUser = normalizeUser({
-  user_id: "usr_01",
-  name: "Samrat Maurya",
-  email: "samrat@finsight.ai",
-  role: "Analyst",
-  avatarInitials: "SM",
-  created_at: "2026-07-10T10:00:00Z",
-});
-
-export async function login(payload: LoginPayload): Promise<AuthUser> {
-  if (USE_MOCK) {
-    await sleep(800);
-    return MOCK_USER;
-  }
-  const data = await apiPost<any>("/auth/login", payload);
+export async function syncBackendProfile(token: string, endpoint: string = "/auth/login"): Promise<AuthUser> {
+  localStorage.setItem("velsora_token", token);
+  const data = await apiPost<any>(endpoint, {});
   return normalizeUser(data.user || data);
 }
 
-export async function register(payload: RegisterPayload): Promise<AuthUser> {
-  if (USE_MOCK) {
-    await sleep(1000);
-    return normalizeUser({
-      user_id: `usr_${Date.now()}`,
-      name: payload.name,
-      email: payload.email,
-      role: "Analyst",
-    });
+export async function login(payload: LoginPayload): Promise<AuthUser> {
+  try {
+    const cred = await signInWithEmailAndPassword(auth, payload.email, payload.password);
+    const token = await cred.user.getIdToken();
+    return await syncBackendProfile(token, "/auth/login");
+  } catch (err: any) {
+    if (auth.app.options.apiKey?.includes("demo-key")) {
+      const devToken = `dev_token_${payload.email.split("@")[0]}`;
+      return await syncBackendProfile(devToken, "/auth/login");
+    }
+    throw err;
   }
-  const data = await apiPost<any>("/auth/register", payload);
-  return normalizeUser(data);
+}
+
+export async function register(payload: RegisterPayload): Promise<AuthUser> {
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, payload.email, payload.password);
+    const token = await cred.user.getIdToken();
+    return await syncBackendProfile(token, "/auth/register");
+  } catch (err: any) {
+    if (auth.app.options.apiKey?.includes("demo-key")) {
+      const devToken = `dev_token_${payload.email.split("@")[0]}`;
+      return await syncBackendProfile(devToken, "/auth/register");
+    }
+    throw err;
+  }
+}
+
+export async function loginWithGoogle(): Promise<AuthUser> {
+  try {
+    const cred = await signInWithPopup(auth, googleProvider);
+    const token = await cred.user.getIdToken();
+    return await syncBackendProfile(token, "/auth/login");
+  } catch (err: any) {
+    if (auth.app.options.apiKey?.includes("demo-key")) {
+      const devToken = `dev_token_google_user`;
+      return await syncBackendProfile(devToken, "/auth/login");
+    }
+    throw err;
+  }
 }
 
 export async function logout(): Promise<void> {
-  if (USE_MOCK) {
-    await sleep(300);
-    return;
-  }
-  await apiPost("/auth/logout");
+  await signOut(auth).catch(() => {});
+  await apiPost("/auth/logout").catch(() => {});
+  localStorage.removeItem("velsora_token");
+  localStorage.removeItem("velsora_user");
 }
 
 export async function getMe(): Promise<AuthUser> {
-  if (USE_MOCK) {
-    await sleep(400);
-    return MOCK_USER;
-  }
   const data = await apiGet<any>("/auth/me");
   return normalizeUser(data);
 }
-

@@ -202,7 +202,7 @@ export function LandingPage() {
         <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-6 w-6 rounded-md bg-gradient-to-br from-indigo-500 to-rose-500" />
-            <span className="font-semibold text-white tracking-tight">FinSight</span>
+            <span className="font-semibold text-white tracking-tight">Velsora</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm text-white/50">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
@@ -473,10 +473,10 @@ export function LandingPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <div className="h-5 w-5 rounded-md bg-gradient-to-br from-indigo-500 to-rose-500" />
-              <span className="font-semibold text-white text-sm tracking-tight">FinSight</span>
+              <span className="font-semibold text-white text-sm tracking-tight">Velsora</span>
             </div>
             <p className="text-white/20 text-sm text-center">
-              © {new Date().getFullYear()} FinSight. Built for finance students, MBA candidates & analysts.
+              © {new Date().getFullYear()} Velsora. Built for finance students, MBA candidates & analysts.
             </p>
             <div className="flex items-center gap-4">
               <a href="#" className="text-white/30 hover:text-white/60 transition-colors">

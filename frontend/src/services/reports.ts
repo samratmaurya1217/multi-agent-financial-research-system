@@ -1,4 +1,4 @@
-import { sleep, apiGet, apiPost, USE_MOCK } from "./api";
+import { apiGet, apiPost } from "./api";
 
 export interface Report {
   // Official SAD Section 14.9 properties
@@ -28,6 +28,13 @@ export function normalizeReport(data: any): Report {
   if (status === "completed") status = "ready";
   if (status === "processing") status = "generating";
 
+  // Backend uses company_names (snake_case), UI uses companyNames (camelCase)
+  const companyNames =
+    data.companyNames ||
+    data.company_names ||
+    [data.target_company].filter(Boolean) ||
+    ["Analyzed Company"];
+
   return {
     ...data,
     report_id,
@@ -38,59 +45,43 @@ export function normalizeReport(data: any): Report {
     id: report_id,
     workspaceId: workspace_id,
     title: data.title || `Financial Report (${report_id})`,
-    companyNames: data.companyNames || ["Analyzed Company"],
+    companyNames,
     type: data.type || "single",
     sections: data.sections || ["Executive Summary", "Financials", "Red Flags", "Outlook"],
     generatedAt: generated_at,
-    pageCount: data.pageCount !== undefined ? data.pageCount : 12,
+    pageCount: data.page_count !== undefined ? data.page_count : data.pageCount,
   };
 }
 
-const MOCK_REPORTS: Report[] = [
-  normalizeReport({ report_id: "rpt_01", workspace_id: "ws_01", title: "Apple Inc. Full Analysis — FY2024", companyNames: ["Apple Inc."], type: "single", sections: ["Executive Summary", "Financials", "Red Flags", "Outlook"], generated_at: "2024-07-13T09:00:00Z", status: "ready", pageCount: 18 }),
-  normalizeReport({ report_id: "rpt_02", workspace_id: "ws_02", title: "Tesla vs Ford — Competitive Benchmark", companyNames: ["Tesla, Inc.", "Ford Motor Company"], type: "comparison", sections: ["Executive Summary", "Financials", "Risk Comparison", "Recommendation"], generated_at: "2024-07-11T14:30:00Z", status: "ready", pageCount: 24 }),
-  normalizeReport({ report_id: "rpt_03", workspace_id: "ws_03", title: "Microsoft Deep Dive — FY2023", companyNames: ["Microsoft Corporation"], type: "single", sections: ["Executive Summary", "Cloud Revenue", "Margins", "Red Flags"], generated_at: "2024-07-08T11:00:00Z", status: "ready", pageCount: 16 }),
-];
-
 export async function getReports(workspaceId: string): Promise<Report[]> {
-  if (USE_MOCK) {
-    await sleep(500);
-    return MOCK_REPORTS.filter((r) => r.workspaceId === workspaceId || r.workspace_id === workspaceId);
-  }
   const data = await apiGet<any[]>(`/reports?workspace_id=${workspaceId}`);
   return Array.isArray(data) ? data.map(normalizeReport) : [];
 }
 
-export async function generateReport(workspaceId: string, docIds: string[]): Promise<Report> {
-  if (USE_MOCK) {
-    await sleep(2000);
-    return normalizeReport({
-      report_id: `rpt_${Date.now()}`,
-      workspace_id: workspaceId,
-      title: "New Report",
-      companyNames: ["Company"],
-      type: docIds.length > 1 ? "comparison" : "single",
-      sections: ["Executive Summary", "Financials", "Red Flags"],
-      generated_at: new Date().toISOString(),
-      status: "ready",
-      pageCount: 12,
-    });
+export async function generateReport(
+  workspaceId: string,
+  docIds: string[],
+  options?: {
+    target_company?: string;
+    comparison_company?: string;
+    type?: string;
+    sections?: string[];
   }
-  const data = await apiPost<any>("/reports", {
+): Promise<Report> {
+  // Correct route: POST /reports/generate (SAD Section 14.9)
+  const data = await apiPost<any>("/reports/generate", {
     workspace_id: workspaceId,
-    document_ids: docIds,
+    type: options?.type || (docIds.length > 1 ? "comparison" : "single"),
+    target_company: options?.target_company || "Company A",
+    comparison_company: options?.comparison_company,
+    sections: options?.sections || ["Executive Summary", "Financials", "Red Flags"],
   });
   return normalizeReport({ ...data, workspace_id: workspaceId });
 }
 
 export async function downloadReport(id: string): Promise<void> {
-  if (USE_MOCK) {
-    await sleep(500);
-    return;
-  }
-  const data = await apiGet<any>(`/reports/${id}`);
+  const data = await apiGet<any>(`/reports/${id}/download`);
   if (data && data.download_url) {
     window.open(data.download_url, "_blank");
   }
 }
-

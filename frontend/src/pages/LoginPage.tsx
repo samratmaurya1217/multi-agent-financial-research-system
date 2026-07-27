@@ -5,22 +5,71 @@ import { useAuth } from "@/store/authStore";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 
 export function LoginPage() {
-  const { login, isLoading, error } = useAuth();
+  const { login, loginWithGoogle, isLoading, error } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("samrat@finsight.ai");
-  const [password, setPassword] = useState("password");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await login({ email, password });
-    navigate("/dashboard");
+    try {
+      await login({ email, password });
+      navigate("/dashboard");
+    } catch {
+      // error handled in store
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await loginWithGoogle();
+      navigate("/dashboard");
+    } catch {
+      // error handled in store
+    }
   };
 
   return (
     <AuthLayout>
       <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
-      <p className="text-white/40 text-sm mb-8">Sign in to your FinSight account to continue.</p>
+      <p className="text-white/40 text-sm mb-6">Sign in to your Velsora account to continue.</p>
+
+      {/* Google Auth Button */}
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={isLoading}
+          className="w-full py-3 px-4 rounded-xl bg-white/[0.06] border border-white/[0.12] text-white font-medium text-sm hover:bg-white/[0.1] transition-all flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer shadow-sm hover:border-white/[0.2]"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <path
+              fill="#EA4335"
+              d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"
+            />
+            <path
+              fill="#4285F4"
+              d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3 0-.8.2-1.6.4-2.3L1.6 7.4C.6 9.4 0 10.9 0 12.5s.6 3.1 1.6 5.1l3.7-2.8z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.2-6.7-5.2L1.6 16.9C3.5 20.7 7.4 24 12 24z"
+            />
+          </svg>
+          Continue with Google
+        </button>
+      </div>
+
+      <div className="relative mb-6 flex items-center justify-center">
+        <div className="border-t border-white/10 w-full"></div>
+        <span className="bg-[#0b0f19] px-3 text-xs text-white/40 uppercase tracking-wider absolute">Or continue with email</span>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -61,7 +110,7 @@ export function LoginPage() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3 rounded-full bg-gradient-to-r from-indigo-500 to-rose-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3 rounded-full bg-gradient-to-r from-indigo-500 to-rose-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isLoading ? "Signing in..." : "Sign In"}
         </button>
