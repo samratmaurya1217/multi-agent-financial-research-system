@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/store/authStore";
 import { ThemeProvider } from "@/store/themeStore";
+import { SmoothScroll } from "@/components/SmoothScroll";
 import { LandingPage } from "@/pages/LandingPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { SignUpPage } from "@/pages/SignUpPage";
@@ -18,7 +19,8 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
+        <SmoothScroll>
+          <BrowserRouter>
           <Routes>
             {/* Public */}
             <Route path="/" element={<LandingPage />} />
@@ -41,6 +43,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
+        </SmoothScroll>
       </AuthProvider>
     </ThemeProvider>
   );
