@@ -64,12 +64,10 @@ def _call_groq_llm(prompt: str) -> str:
         "Content-Type": "application/json"
     }
 
-    # Model failover list (each has independent rate limits)
+    # Model failover list (put fastest model first for zero latency)
     models = [
-        os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"), 
-        "mixtral-8x7b-32768", 
-        "llama3-8b-8192", 
-        "gemma2-9b-it"
+        "llama-3.1-8b-instant",
+        os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
     ]
     
     last_error = None
@@ -89,7 +87,7 @@ def _call_groq_llm(prompt: str) -> str:
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.0,
-            "max_tokens": 3000,
+            "max_tokens": 1500,
         }
 
         try:
@@ -212,7 +210,8 @@ def node_llm_scan(state: RedFlagAgentState) -> RedFlagAgentState:
     logger.info("[Red Flag Agent] Sending data to LLM for comprehensive scan...")
 
     context_parts = []
-    for c in risk_chunks[:25]:
+    # Limit chunks to avoid exceeding context window (8192 tokens max)
+    for c in risk_chunks[:20]:
         context_parts.append(f"[Page {c.get('page', '?')}] {c.get('text', '')}")
     text_context = "\n\n".join(context_parts)
 
