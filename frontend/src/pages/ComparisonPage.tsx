@@ -30,44 +30,44 @@ export function ComparisonPage() {
     <DashboardLayout>
       <div className="px-6 py-8 max-w-6xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <div className="flex items-center gap-2 text-white/30 text-sm mb-2"><GitCompare className="h-4 w-4" /><span>Comparison</span></div>
-          <h1 className="text-2xl font-bold text-white mb-1">Side-by-Side Comparison</h1>
-          <p className="text-white/40 text-sm">Compare key financial metrics across companies in your workspace.</p>
+          <div className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-2"><GitCompare className="h-4 w-4" /><span>Comparison</span></div>
+          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-1">Side-by-Side Comparison</h1>
+          <p className="text-slate-500 font-medium text-sm">Compare key financial metrics across companies in your workspace.</p>
         </motion.div>
 
         {/* Company selector */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex flex-wrap gap-3 mb-8">
           {companies.map((c, i) => (
-            <button key={c} onClick={() => toggle(i)} className={cn("px-4 py-2 rounded-full text-sm font-medium transition-all border", selected.includes(i) ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300" : "border-white/[0.08] text-white/40 hover:text-white hover:border-white/20")}>
+            <button key={c} onClick={() => toggle(i)} className={cn("px-4 py-2 rounded-full text-sm font-bold transition-all border", selected.includes(i) ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm")}>
               {c}
             </button>
           ))}
         </motion.div>
 
         {/* Metrics table */}
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-2xl border border-white/[0.08] overflow-hidden mb-6">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-3xl border border-slate-200 bg-white overflow-hidden mb-6 shadow-sm">
           <table className="w-full">
-            <thead className="bg-white/[0.03]">
+            <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-white/40 uppercase tracking-wider">Metric</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Metric</th>
                 {companies.filter((_, i) => selected.includes(i)).map((c) => (
-                  <th key={c} className="px-6 py-3 text-right text-xs font-semibold text-white/40 uppercase tracking-wider">{c.split(" ")[0]}</th>
+                  <th key={c} className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">{c.split(" ")[0]}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {metrics.map((m, ri) => (
-                <motion.tr key={m.label} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ri * 0.03 }} className="border-t border-white/[0.04] hover:bg-white/[0.02] transition-colors">
-                  <td className="px-6 py-3.5 text-sm text-white/60 font-medium">{m.label}</td>
+                <motion.tr key={m.label} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ri * 0.03 }} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 text-sm text-slate-600 font-bold">{m.label}</td>
                   {companies.map((_, ci) => {
                     if (!selected.includes(ci)) return null;
                     const isBest = m.best === ci;
                     const isWorst = m.worst === ci;
                     return (
-                      <td key={ci} className={cn("px-6 py-3.5 text-right text-sm font-semibold", isBest ? "text-emerald-400" : isWorst ? "text-rose-400" : "text-white")}>
+                      <td key={ci} className={cn("px-6 py-4 text-right text-sm font-extrabold", isBest ? "text-emerald-600" : isWorst ? "text-rose-600" : "text-slate-800")}>
                         <span className="flex items-center justify-end gap-1.5">
                           {m.values[ci]}
-                          {isBest ? <TrendingUp className="h-3.5 w-3.5 text-emerald-400/60" /> : isWorst ? <TrendingDown className="h-3.5 w-3.5 text-rose-400/60" /> : <Minus className="h-3.5 w-3.5 text-white/20" />}
+                          {isBest ? <TrendingUp className="h-4 w-4 text-emerald-500" /> : isWorst ? <TrendingDown className="h-4 w-4 text-rose-500" /> : <Minus className="h-4 w-4 text-slate-300" />}
                         </span>
                       </td>
                     );
@@ -79,15 +79,15 @@ export function ComparisonPage() {
         </motion.div>
 
         {/* Narrative */}
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="p-6 rounded-2xl border border-white/[0.08] bg-white/[0.02]">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-              <GitCompare className="h-4 w-4 text-indigo-400" />
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="p-6 md:p-8 rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+              <GitCompare className="h-5 w-5 text-indigo-500" />
             </div>
-            <h3 className="text-white font-semibold">Comparative Analysis</h3>
-            <span className="ml-auto text-xs text-white/30 px-2 py-0.5 rounded-full border border-white/[0.06] bg-white/[0.03]">AI-generated · Cite-verified</span>
+            <h3 className="text-slate-800 font-bold text-lg">Comparative Analysis</h3>
+            <span className="ml-auto text-xs font-bold text-slate-400 px-3 py-1 rounded-full border border-slate-100 bg-slate-50">AI-generated</span>
           </div>
-          <div className="text-sm text-white/60 leading-relaxed whitespace-pre-line">{narrative}</div>
+          <div className="text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">{narrative}</div>
         </motion.div>
       </div>
     </DashboardLayout>
