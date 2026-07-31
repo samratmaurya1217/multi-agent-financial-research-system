@@ -89,3 +89,11 @@ export async function uploadDocument(workspaceId: string, file: File): Promise<D
 export async function deleteDocument(id: string): Promise<void> {
   await apiDelete(`/documents/${id}`);
 }
+
+export async function getDocumentRedFlags(documentId: string): Promise<any> {
+  return await apiGet<any>(`/documents/${documentId}/red_flags`);
+}
+
+export async function getDocumentExtraction(documentId: string): Promise<any> {
+  return await apiGet<any>(`/documents/${documentId}/extraction`);
+}

@@ -18,6 +18,7 @@ export interface Report {
   sections: string[];
   generatedAt: string;
   pageCount?: number;
+  redFlags?: any[];
 }
 
 export function normalizeReport(data: any): Report {
@@ -50,11 +51,13 @@ export function normalizeReport(data: any): Report {
     sections: data.sections || ["Executive Summary", "Financials", "Red Flags", "Outlook"],
     generatedAt: generated_at,
     pageCount: data.page_count !== undefined ? data.page_count : data.pageCount,
+    redFlags: data.red_flags || data.redFlags || [],
   };
 }
 
-export async function getReports(workspaceId: string): Promise<Report[]> {
-  const data = await apiGet<any[]>(`/reports?workspace_id=${workspaceId}`);
+export async function getReports(workspaceId?: string): Promise<Report[]> {
+  const url = workspaceId ? `/reports?workspace_id=${workspaceId}` : "/reports";
+  const data = await apiGet<any[]>(url);
   return Array.isArray(data) ? data.map(normalizeReport) : [];
 }
 

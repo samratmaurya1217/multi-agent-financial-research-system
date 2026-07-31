@@ -67,13 +67,13 @@ export function WorkspacesPage() {
       <div className="px-6 py-8 max-w-6xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between mb-8">
           <div>
-            <div className="flex items-center gap-2 text-white/30 text-sm mb-2">
+            <div className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-2">
               <FolderOpen className="h-4 w-4" /><span>Workspaces</span>
             </div>
-            <h1 className="text-2xl font-bold text-white mb-1">Your Workspaces</h1>
-            <p className="text-white/40 text-sm">Organize your financial research into dedicated workspaces.</p>
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-1">Your Workspaces</h1>
+            <p className="text-slate-500 font-medium text-sm">Organize your financial research into dedicated workspaces.</p>
           </div>
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-rose-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/20">
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20">
             <Plus className="h-4 w-4" /> New Workspace
           </button>
         </motion.div>
@@ -89,20 +89,20 @@ export function WorkspacesPage() {
             {workspaces.map((ws, i) => (
               <motion.div key={ws.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
                 onClick={() => navigate(`/workspaces/${ws.id}`)}
-                className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.12] hover:scale-[1.02] transition-all cursor-pointer"
+                className="p-6 rounded-3xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 hover:-translate-y-1 transition-all cursor-pointer"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                    <FolderOpen className="h-5 w-5 text-indigo-400" />
+                <div className="flex items-start justify-between mb-6">
+                  <div className="h-12 w-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                    <FolderOpen className="h-6 w-6 text-indigo-500" />
                   </div>
                   <StatusBadge status={ws.status} />
                 </div>
-                <h3 className="text-white font-semibold mb-1 truncate">{ws.name}</h3>
-                <p className="text-white/40 text-sm mb-4 line-clamp-2">{ws.description}</p>
-                <div className="flex items-center gap-4 text-xs text-white/30">
-                  <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{ws.documentCount} docs</span>
-                  <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3" />{ws.sessionCount} sessions</span>
-                  {ws.status === "archived" && <Archive className="h-3 w-3" />}
+                <h3 className="text-slate-800 font-bold text-lg mb-1 truncate">{ws.name}</h3>
+                <p className="text-slate-500 font-medium text-sm mb-6 line-clamp-2">{ws.description}</p>
+                <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+                  <span className="flex items-center gap-1.5"><FileText className="h-4 w-4" />{ws.documentCount} docs</span>
+                  <span className="flex items-center gap-1.5"><MessageSquare className="h-4 w-4" />{ws.sessionCount} sessions</span>
+                  {ws.status === "archived" && <Archive className="h-4 w-4" />}
                 </div>
               </motion.div>
             ))}
