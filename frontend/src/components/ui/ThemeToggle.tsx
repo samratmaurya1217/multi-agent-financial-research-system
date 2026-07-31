@@ -1,4 +1,3 @@
-import React from "react";
 import { useTheme } from "@/store/themeStore";
 
 export function ThemeToggle({ className }: { className?: string }) {

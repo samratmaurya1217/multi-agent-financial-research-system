@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 *, *::before, *::after {
@@ -6,96 +7,213 @@
 
 :root {
   color-scheme: dark;
+  --accent-emerald: #10B981;
+  --accent-cyan: #06B6D4;
+  --accent-gradient: linear-gradient(135deg, #10B981, #06B6D4);
+  --bg-base: #050508;
+  --bg-surface: #0d0d12;
+  --bg-card: #12121a;
+  --bg-card-hover: #1a1a24;
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-default: rgba(255,255,255,0.1);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
 }
 
-html.light {
-  color-scheme: light;
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
-  background-color: #030303;
-  color: #fafafa;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Light theme overrides */
-html.light body {
-  background-color: #f8fafc;
-  color: #0f172a;
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.14);
 }
 
-html.light .bg-\[\#030303\] {
-  background-color: #f8fafc !important;
+/* Selection */
+::selection {
+  background: rgba(16, 185, 129, 0.25);
+  color: #f1f5f9;
 }
 
-html.light .bg-\[\#0d0d0d\] {
-  background-color: #ffffff !important;
+/* ─── Glassmorphism utilities ─────────────────────────────────────────── */
+.glass {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
-html.light .border-white\/\[0\.04\],
-html.light .border-white\/\[0\.06\],
-html.light .border-white\/\[0\.08\],
-html.light .border-white\/\[0\.10\],
-html.light .border-white\/\[0\.12\] {
-  border-color: rgba(15, 23, 42, 0.08) !important;
+.glass-card {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
 }
 
-html.light .bg-white\/\[0\.02\],
-html.light .bg-white\/\[0\.03\],
-html.light .bg-white\/\[0\.04\],
-html.light .bg-white\/\[0\.06\],
-html.light .bg-white\/\[0\.08\],
-html.light .bg-white\/\[0\.10\] {
-  background-color: rgba(255, 255, 255, 0.8) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+.glass-nav {
+  background: rgba(5, 5, 8, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
-html.light .text-white {
-  color: #0f172a !important;
+/* ─── Gradient utilities ─────────────────────────────────────────────── */
+.gradient-emerald-cyan {
+  background: linear-gradient(135deg, #10B981, #06B6D4);
 }
 
-html.light .text-white\/70,
-html.light .text-white\/80,
-html.light .text-white\/60 {
-  color: #334155 !important;
+.text-gradient-emerald {
+  background: linear-gradient(135deg, #10B981, #06B6D4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-html.light .text-white\/30,
-html.light .text-white\/40,
-html.light .text-white\/50 {
-  color: #64748b !important;
+.text-gradient-hero {
+  background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-html.light .text-white\/20 {
-  color: #94a3b8 !important;
+/* ─── Glow effects ──────────────────────────────────────────────────── */
+.glow-emerald {
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.2), 0 0 60px rgba(16, 185, 129, 0.08);
 }
 
-/* User's Custom Sun / Moon Switch CSS */
+.glow-sm-emerald {
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+}
+
+/* ─── Button styles ─────────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 100px;
+  background: linear-gradient(135deg, #10B981, #06B6D4);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 30px rgba(16, 185, 129, 0.4);
+  opacity: 0.95;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.85);
+  font-weight: 500;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255,255,255,0.12);
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.2);
+  transform: translateY(-1px);
+}
+
+/* ─── Sidebar dark glass ────────────────────────────────────────────── */
+.sidebar-bg {
+  background: #08080d;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ─── Stat card micro-animation ─────────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* ─── Smooth hover transitions ──────────────────────────────────────── */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+/* ─── FintechX-inspired floating badge ──────────────────────────────── */
+.badge-emerald {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 100px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #10B981;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ─── Switch (theme toggle) ─────────────────────────────────────────── */
 .switch {
   display: block;
   --width-of-switch: 3.5em;
   --height-of-switch: 2em;
-  /* size of sliding icon -- sun and moon */
   --size-of-icon: 1.4em;
-  /* it is like a inline-padding of switch */
   --slider-offset: 0.3em;
   position: relative;
   width: var(--width-of-switch);
   height: var(--height-of-switch);
 }
 
-/* Hide default HTML checkbox */
 .switch input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-/* The slider */
 .slider {
   position: absolute;
   cursor: pointer;
@@ -103,10 +221,10 @@ html.light .text-white\/20 {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #f4f4f5;
+  background-color: #0d0d12;
+  border: 1px solid rgba(255,255,255,0.1);
   transition: .4s;
   border-radius: 30px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .slider:before {
@@ -118,18 +236,267 @@ html.light .text-white\/20 {
   left: var(--slider-offset, 0.3em);
   top: 50%;
   transform: translateY(-50%);
-  background: linear-gradient(40deg, #ff0080, #ff8c00 70%);
+  background: linear-gradient(40deg, #10B981, #06B6D4 70%);
   transition: .4s;
 }
 
 input:checked + .slider {
-  background-color: #303136;
-  border-color: rgba(255, 255, 255, 0.1);
+  background-color: #1a1a2e;
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 input:checked + .slider:before {
   left: calc(100% - (var(--size-of-icon, 1.4em) + var(--slider-offset, 0.3em)));
-  background: #303136;
-  /* change the value of second inset in box-shadow to change the angle and direction of the moon  */
-  box-shadow: inset -3px -2px 5px -2px #8983f7, inset -10px -4px 0 0 #a3dafb;
+  background: #1a1a2e;
+  box-shadow: inset -3px -2px 5px -2px #10B981, inset -10px -4px 0 0 #06B6D4;
 }
+
+/* ─── Animate-in ────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.6s ease forwards;
+}
+
+/* ─── Hero gradient mesh ────────────────────────────────────────────── */
+@keyframes meshMove {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 10px) scale(0.98); }
+}
+
+.mesh-gradient {
+  animation: meshMove 15s ease-in-out infinite;
+}
+
+/* ─── Aurora effect ─────────────────────────────────────────────────── */
+@keyframes aurora {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.aurora {
+  background: linear-gradient(-45deg, #10B981, #06B6D4, #8B5CF6, #3B82F6);
+  background-size: 400% 400%;
+  animation: aurora 8s ease infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ─── Card hover glow ───────────────────────────────────────────────── */
+.card-hover {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.card-hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(circle at center, rgba(16,185,129,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.card-hover:hover::after {
+  opacity: 1;
+}
+
+.card-hover:hover {
+  border-color: rgba(16, 185, 129, 0.2) !important;
+  transform: translateY(-2px);
+}
+
+/* ─── Typing cursor ─────────────────────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* ─── Number counter animation ──────────────────────────────────────── */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.count-up {
+  animation: countUp 0.5s ease forwards;
+}
+
+/* ─── FintechX Light Theme (Sky, Grass, Glass Pills) ─────────────────── */
+.sky-hero-bg {
+  background: linear-gradient(180deg, #bae6fd 0%, #e0f2fe 45%, #f0f9ff 75%, #f8fafc 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.sky-clouds {
+  background-image: 
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.8) 0%, transparent 40%),
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.7) 0%, transparent 35%),
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.6) 0%, transparent 50%);
+}
+
+.grass-hills-bottom {
+  position: absolute;
+  bottom: 0;
+  left: -10%;
+  right: -10%;
+  height: 280px;
+  background: 
+    radial-gradient(ellipse 70% 100% at 20% 100%, #16a34a 0%, #15803d 60%, transparent 100%),
+    radial-gradient(ellipse 80% 100% at 80% 100%, #22c55e 0%, #16a34a 70%, transparent 100%),
+    radial-gradient(ellipse 100% 80% at 50% 100%, #15803d 0%, #146c32 80%, transparent 100%);
+  filter: drop-shadow(0 -10px 20px rgba(0,0,0,0.1));
+  z-index: 1;
+  pointer-events: none;
+}
+
+.grass-hills-section {
+  background: 
+    radial-gradient(ellipse 70% 100% at 25% 100%, #16a34a 0%, #15803d 60%, transparent 100%),
+    radial-gradient(ellipse 75% 100% at 75% 100%, #22c55e 0%, #16a34a 70%, transparent 100%);
+  position: relative;
+}
+
+.glass-pill-nav-light {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 35px -10px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03), inset 0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+.btn-fintechx-blue {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 9999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+.btn-fintechx-blue:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+}
+
+.btn-fintechx-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  text-decoration: none;
+}
+.btn-fintechx-light:hover {
+  background: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  border-color: #94a3b8;
+}
+
+.fintechx-card-light {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.07);
+  border-radius: 24px;
+}
+
+.fintechx-card-dark {
+  background: #08080d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 50px -15px rgba(0, 0, 0, 0.5);
+  border-radius: 24px;
+  color: #f8fafc;
+}
+
+.badge-pill-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(203, 213, 225, 0.6);
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+
+.badge-ai {
+  width: 100px;
+  height: 100px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 6px;
+  aspect-ratio: 1 / 1;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(8, 8, 13, 0.98));
+  color: #f8fafc;
+  font-weight: 800;
+  font-size: 32px;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  -webkit-filter: drop-shadow(0px 8px 6px rgba(0, 0, 0, 0.15)) drop-shadow(0px 3px 3px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0px 8px 6px rgba(0, 0, 0, 0.15)) drop-shadow(0px 3px 3px rgba(0, 0, 0, 0.3));
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.4);
+  vertical-align: middle;
+  margin: 0 16px;
+  transform: rotate(-16deg);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: default;
+  overflow: visible;
+  position: relative;
+}
+.badge-ai:hover {
+  transform: rotate(0deg) scale(1.08);
+  border-color: #06B6D4;
+}
+
+/* ─── Lenis Smooth Scrolling ─────────────────────────────────────────── */
+html.lenis, html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+
