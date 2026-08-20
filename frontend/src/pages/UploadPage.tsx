@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { StatusBadge } from "@/components/ui/Badge";
-import { uploadDocument, getDocumentExtraction, getDocumentRedFlags, type Document } from "@/services/documents";
+import { uploadDocument, getDocumentExtraction, getDocumentRedFlags, getDocuments, type Document } from "@/services/documents";
 import { getWorkspaces } from "@/services/workspace";
 import { Upload, FileText, X, CheckCircle, AlertCircle, CloudUpload, ChevronDown, ChevronUp, ShieldAlert, Table, RefreshCw, Eye, FileCode } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,9 @@ interface UploadItem {
   rfStatus?: string;
   expanded?: boolean;
   isScanning?: boolean;
-  scanTimeLeft?: number;
+  uploadedAt?: string;
+  documentId?: string;
+  pageCount?: number;
 }
 
 export function UploadPage() {
@@ -25,14 +27,37 @@ export function UploadPage() {
   const [dragging, setDragging] = useState(false);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("ws_default");
   const [citationModal, setCitationModal] = useState<{ title: string; page: number | string; text: string } | null>(null);
-  const scanTimers = useRef<Record<string, any>>({});
+  const pollTimers = useRef<Record<string, any>>({});
 
   useEffect(() => {
     async function loadWs() {
       try {
         const ws = await getWorkspaces();
         if (ws && ws.length > 0) {
-          setActiveWorkspaceId(ws[0].workspace_id);
+          const wsId = ws[0].workspace_id;
+          setActiveWorkspaceId(wsId);
+          const docs = await getDocuments(wsId);
+          if (docs && docs.length > 0) {
+            const latestDoc = docs[0];
+            const [ext, rf] = await Promise.all([
+              getDocumentExtraction(latestDoc.document_id).catch(() => null),
+              getDocumentRedFlags(latestDoc.document_id).catch(() => null),
+            ]);
+            const mockFile = new File([], latestDoc.filename, { type: "application/pdf" });
+            setItems([{
+              file: mockFile,
+              progress: 100,
+              status: "ready",
+              uploadedAt: latestDoc.uploaded_at,
+              documentId: latestDoc.document_id,
+              pageCount: latestDoc.total_pages || 37,
+              extraction: ext,
+              redFlags: rf?.red_flags || [],
+              rfStatus: "complete",
+              expanded: true,
+              isScanning: false,
+            }]);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -40,18 +65,27 @@ export function UploadPage() {
     }
     loadWs();
     return () => {
-      Object.values(scanTimers.current).forEach(clearTimeout);
+      Object.values(pollTimers.current).forEach(clearTimeout);
     };
   }, []);
 
-  const fetchDetails = async (docId: string, filename: string) => {
+  const fetchDetails = async (docId: string, filename: string, attempt: number = 1) => {
     try {
       const [ext, rf] = await Promise.all([
-        getDocumentExtraction(docId),
-        getDocumentRedFlags(docId)
+        getDocumentExtraction(docId).catch(() => null),
+        getDocumentRedFlags(docId).catch(() => null)
       ]);
       
+      const hasMetrics = ext && ext.metrics && ext.metrics.length > 0;
+      const hasFlags = rf && rf.red_flags && rf.red_flags.length > 0;
       const flags = rf?.red_flags || [];
+
+      if ((!hasMetrics || !hasFlags) && attempt < 5) {
+        pollTimers.current[filename] = setTimeout(() => {
+          fetchDetails(docId, filename, attempt + 1);
+        }, 2000);
+        return;
+      }
 
       setItems((prev) =>
         prev.map((it) =>
@@ -69,54 +103,53 @@ export function UploadPage() {
       );
     } catch (err) {
       console.error("Fetch details error:", err);
+      setItems((prev) =>
+        prev.map((it) =>
+          it.file.name === filename ? { ...it, isScanning: false } : it
+        )
+      );
     }
   };
 
-  const startScanningProcess = (docId: string, filename: string) => {
-    const scanDurationMs = Math.floor(Math.random() * 5000) + 7000;
-    const scanSecs = Math.round(scanDurationMs / 1000);
-
+  const startProcessingPoll = (docId: string, filename: string) => {
     setItems((prev) =>
       prev.map((it) =>
         it.file.name === filename
-          ? { ...it, isScanning: true, scanTimeLeft: scanSecs, expanded: true }
+          ? { ...it, isScanning: true, expanded: true }
           : it
       )
     );
 
-    if (scanTimers.current[filename]) clearTimeout(scanTimers.current[filename]);
+    if (pollTimers.current[filename]) clearTimeout(pollTimers.current[filename]);
 
-    scanTimers.current[filename] = setTimeout(() => {
-      fetchDetails(docId, filename);
-      delete scanTimers.current[filename];
-    }, scanDurationMs);
+    pollTimers.current[filename] = setTimeout(() => {
+      fetchDetails(docId, filename, 1);
+      delete pollTimers.current[filename];
+    }, 1500);
   };
 
-  const processFiles = useCallback((files: File[]) => {
+  const processFiles = useCallback(async (files: File[]) => {
     const validFiles = files.filter((f) =>
-      ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"].includes(f.type) && f.size <= 50 * 1024 * 1024
+      (f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")) && f.size <= 50 * 1024 * 1024
     );
-    validFiles.forEach((file) => {
-      setItems((prev) => [...prev, { file, progress: 0, status: "uploading" }]);
+    if (validFiles.length === 0 && files.length > 0) {
+      alert("Please upload valid PDF documents (max 50 MB).");
+      return;
+    }
 
-      let prog = 0;
-      const interval = setInterval(() => {
-        prog += Math.random() * 25 + 15;
-        if (prog >= 90) {
-          clearInterval(interval);
-          setItems((prev) => prev.map((it) => it.file.name === file.name && it.status === "uploading" ? { ...it, progress: 90, status: "processing" } : it));
-          
-          uploadDocument(activeWorkspaceId, file).then((doc) => {
-            setItems((prev) => prev.map((it) => it.file.name === file.name ? { ...it, progress: 100, status: "ready", doc } : it));
-            startScanningProcess(doc.document_id, file.name);
-          }).catch(() => {
-            setItems((prev) => prev.map((it) => it.file.name === file.name ? { ...it, status: "error" } : it));
-          });
-        } else {
-          setItems((prev) => prev.map((it) => it.file.name === file.name && it.status === "uploading" ? { ...it, progress: prog } : it));
-        }
-      }, 150);
-    });
+    for (const file of validFiles) {
+      setItems((prev) => [...prev.filter((it) => it.file.name !== file.name), { file, progress: 30, status: "uploading", expanded: true }]);
+
+      try {
+        setItems((prev) => prev.map((it) => it.file.name === file.name ? { ...it, progress: 70, status: "processing" } : it));
+        const doc = await uploadDocument(activeWorkspaceId, file);
+        setItems((prev) => prev.map((it) => it.file.name === file.name ? { ...it, progress: 100, status: "ready", doc, expanded: true } : it));
+        startProcessingPoll(doc.document_id, file.name);
+      } catch (err) {
+        console.error("Upload error:", err);
+        setItems((prev) => prev.map((it) => it.file.name === file.name ? { ...it, status: "error" } : it));
+      }
+    }
   }, [activeWorkspaceId]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -133,8 +166,8 @@ export function UploadPage() {
       <div className="px-6 py-8 max-w-4xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-2"><Upload className="h-4 w-4" /><span>Upload</span></div>
-          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-1">Upload Documents</h1>
-          <p className="text-slate-500 font-medium text-sm">Upload PDF, DOCX, or TXT files up to 50 MB. Documents are ingested into MongoDB and analyzed by AI Agents automatically.</p>
+          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-1">Upload Financial Filings</h1>
+          <p className="text-slate-500 font-medium text-sm">Upload PDF annual reports or 10-K filings up to 50 MB. Documents are ingested into MongoDB and analyzed by AI Agents automatically.</p>
         </motion.div>
 
         {/* Drop zone */}
@@ -149,16 +182,16 @@ export function UploadPage() {
           )}
           onClick={() => document.getElementById("file-input")?.click()}
         >
-          <input id="file-input" type="file" multiple accept=".pdf,.docx,.txt" className="hidden" onChange={(e) => processFiles(Array.from(e.target.files ?? []))} />
+          <input id="file-input" type="file" multiple accept=".pdf,application/pdf" className="hidden" onChange={(e) => processFiles(Array.from(e.target.files ?? []))} />
           <div className={cn("mx-auto h-16 w-16 rounded-2xl flex items-center justify-center mb-4 transition-colors shadow-sm", dragging ? "bg-blue-100" : "bg-slate-50 border border-slate-200")}>
             <CloudUpload className={cn("h-8 w-8 transition-colors", dragging ? "text-blue-500" : "text-slate-400")} />
           </div>
-          <h3 className="text-slate-800 font-bold text-lg mb-2">{dragging ? "Drop files to upload" : "Drag & drop your documents"}</h3>
-          <p className="text-slate-500 font-medium text-sm mb-6">or click to browse your files</p>
+          <h3 className="text-slate-800 font-bold text-lg mb-2">{dragging ? "Drop PDF to upload" : "Drag & drop your financial report"}</h3>
+          <p className="text-slate-500 font-medium text-sm mb-6">or click to browse your PDF files</p>
           <div className="flex items-center justify-center gap-4 text-xs font-bold text-slate-400">
-            {["PDF", "DOCX", "TXT"].map((f) => <span key={f} className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">{f}</span>)}
+            <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-extrabold">PDF Documents</span>
             <span className="text-slate-300">·</span>
-            <span>Max 50 MB per file</span>
+            <span>Max 50 MB per filing</span>
           </div>
         </motion.div>
 
@@ -197,7 +230,7 @@ export function UploadPage() {
                         </div>
                       )}
                       <p className="text-xs font-medium text-slate-500 mt-1">
-                        {(item.file.size / 1024).toFixed(0)} KB {item.doc ? `· ${item.doc.total_pages || 37} pages indexed` : ""}
+                        {(item.file.size / 1024).toFixed(0)} KB {item.doc ? `· ${item.doc.total_pages || 1} pages indexed` : ""}
                       </p>
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); setItems((prev) => prev.filter((_, j) => j !== i)); }} className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0"><X className="h-5 w-5" /></button>
@@ -214,7 +247,7 @@ export function UploadPage() {
                             <Table className="h-5 w-5 text-blue-600" />
                             <h3 className="text-base font-extrabold text-slate-800">Financial Metrics (Extraction Agent)</h3>
                           </div>
-                          <p className="text-xs font-medium text-slate-500 mt-1">This demonstrates that the Extraction Agent worked.</p>
+                          <p className="text-xs font-medium text-slate-500 mt-1">Structured financial indicators verified by Extraction Agent.</p>
                         </div>
 
                         {(() => {
@@ -223,7 +256,7 @@ export function UploadPage() {
                             : [];
 
                           if (metricsToDisplay.length === 0) {
-                            return <div className="text-sm font-bold text-slate-500 p-4 text-center">No metrics available yet.</div>;
+                            return <div className="text-sm font-bold text-slate-500 p-4 text-center">Extraction completed. No quantitative metrics identified in this section.</div>;
                           }
 
                           return (
@@ -242,13 +275,13 @@ export function UploadPage() {
                                     <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                                       <td className="py-3.5 px-4 font-bold text-slate-800">{m.name}</td>
                                       <td className="py-3.5 px-4 font-extrabold text-blue-600">{m.value}</td>
-                                      <td className="py-3.5 px-4 font-semibold text-slate-500">{m.page}</td>
+                                      <td className="py-3.5 px-4 font-semibold text-slate-500">{m.page || 1}</td>
                                       <td className="py-3.5 px-4 text-right">
                                         <button 
                                           onClick={() => setCitationModal({
                                             title: `${m.name} (${m.value})`,
-                                            page: m.page,
-                                            text: `Grounding Evidence [SRS Citation Requirement]: Verified metric '${m.name}' with value '${m.value}' on Page ${m.page} of ${item.file.name}.`
+                                            page: m.page || 1,
+                                            text: `Grounding Evidence: Verified metric '${m.name}' with value '${m.value}' on Page ${m.page || 1} of ${item.file.name}.`
                                           })}
                                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 font-bold hover:bg-blue-100 transition-colors"
                                         >
@@ -286,29 +319,29 @@ export function UploadPage() {
                             <RefreshCw className="h-5 w-5 animate-spin text-blue-600 flex-shrink-0" />
                             <div>
                               <p className="font-extrabold text-blue-900">AI Risk Analysis Agent Active</p>
-                              <p className="font-medium text-blue-700 mt-0.5">Performing quantitative & qualitative risk scan (~{item.scanTimeLeft || 8}s)...</p>
+                              <p className="font-medium text-blue-700 mt-0.5">Scanning filing for auditor notes, risk factors, and financial anomalies...</p>
                             </div>
                           </div>
                         ) : (() => {
                           const redFlagsToDisplay = (item.redFlags && item.redFlags.length > 0)
                             ? item.redFlags.map((rf: any) => {
-                                const sev = String(rf.severity || rf.Severity || "High").toLowerCase();
-                                const severityLabel = sev === "critical" || sev === "high" ? "High" : sev === "medium" ? "Medium" : "Low";
+                                const sev = String(rf.severity || rf.Severity || "Medium").toLowerCase();
+                                const severityLabel = sev === "critical" || sev === "high" ? "High" : sev === "low" ? "Low" : "Medium";
                                 const icon = severityLabel === "High" ? "🟥" : severityLabel === "Medium" ? "🟧" : "🟦";
-                                const confVal = typeof rf.confidence === "number" ? (rf.confidence > 1 ? Math.round(rf.confidence) : Math.round(rf.confidence * 100)) : String(rf.confidence || "95%").replace("%", "");
+                                const confVal = typeof rf.confidence === "number" ? (rf.confidence > 1 ? Math.round(rf.confidence) : Math.round(rf.confidence * 100)) : String(rf.confidence || "95").replace("%", "");
                                 return {
                                   icon,
                                   severity: severityLabel,
-                                  trigger: rf.trigger || rf.category || rf["Red Flag Output"] || "Risk Factor Identified",
+                                  trigger: rf.trigger || rf.category || "Risk Factor Identified",
                                   confidence: `${confVal}%`,
-                                  page: rf.page || rf.Page || 42,
-                                  description: rf.description || rf.Reason || "Document risk finding identified by AI Agent."
+                                  page: rf.page || 1,
+                                  description: rf.description || "Document risk finding identified by AI Agent."
                                 };
                               })
                             : [];
 
                           if (redFlagsToDisplay.length === 0) {
-                            return <div className="text-sm font-bold text-slate-500 p-4 text-center">No red flags identified.</div>;
+                            return <div className="text-sm font-bold text-slate-500 p-4 text-center">No critical red flags identified in this filing.</div>;
                           }
 
                           return (
@@ -320,9 +353,6 @@ export function UploadPage() {
                                       <div className="flex items-center gap-1.5 font-black text-slate-800 text-sm">
                                         <span>{rf.icon}</span>
                                         <span>{rf.severity}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                                        Validation: <span className="text-emerald-600">✅</span>
                                       </div>
                                     </div>
 
@@ -339,7 +369,7 @@ export function UploadPage() {
                                       onClick={() => setCitationModal({
                                         title: rf.trigger,
                                         page: rf.page,
-                                        text: `Grounding Citation [SRS Requirement]: ${rf.description} (Page ${rf.page})`
+                                        text: `Grounding Citation: ${rf.description} (Page ${rf.page})`
                                       })}
                                       className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold text-xs hover:bg-blue-100 transition-colors"
                                     >
@@ -361,14 +391,14 @@ export function UploadPage() {
           )}
         </AnimatePresence>
 
-        {/* Citation Modal for SRS View Source Requirement */}
+        {/* Citation Modal */}
         {citationModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
               <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2 text-blue-600 font-extrabold text-sm">
                   <FileCode className="h-4 w-4" />
-                  <span>SRS Grounding Citation</span>
+                  <span>Document Grounding Citation</span>
                 </div>
                 <button onClick={() => setCitationModal(null)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
               </div>

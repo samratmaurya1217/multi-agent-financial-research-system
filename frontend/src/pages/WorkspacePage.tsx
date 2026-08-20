@@ -23,22 +23,22 @@ function CreateWorkspaceModal({ onClose, onCreate }: { onClose: () => void; onCr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="relative bg-[#0a0a0f] border border-white/[0.10] rounded-2xl p-6 w-full max-w-md z-10">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-white">New Workspace</h2>
-          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors"><X className="h-5 w-5" /></button>
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="relative bg-white border border-slate-100 rounded-3xl p-6 w-full max-w-md z-10 shadow-2xl">
+        <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-3">
+          <h2 className="text-lg font-extrabold text-slate-800">New Workspace</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="h-5 w-5" /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Apple Inc. Analysis" className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/60 transition-all text-sm" />
+            <label className="block text-sm font-bold text-slate-700 mb-1.5">Workspace Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Annual Filings Analysis" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-medium" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">Description</label>
-            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} placeholder="Describe the purpose of this workspace..." className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/60 transition-all text-sm resize-none" />
+            <label className="block text-sm font-bold text-slate-700 mb-1.5">Description</label>
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} placeholder="Describe the focus or companies in this workspace..." className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-medium resize-none" />
           </div>
-          <button type="submit" disabled={loading} className="w-full py-3 rounded-full bg-gradient-to-r from-indigo-500 to-rose-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+          <button type="submit" disabled={loading} className="w-full py-3.5 rounded-full bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 disabled:opacity-50">
             {loading ? "Creating..." : "Create Workspace"}
           </button>
         </form>

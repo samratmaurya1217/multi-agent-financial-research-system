@@ -1,7 +1,7 @@
 // Base API client — Velsora backend at http://localhost:8000
 // All mock flags removed. Real FastAPI backend is used for all requests.
 
-export const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+export const BASE_URL = import.meta.env.VITE_API_URL ?? (typeof window !== "undefined" && window.location.hostname ? `http://${window.location.hostname}:8000` : "http://127.0.0.1:8000");
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem("velsora_token");

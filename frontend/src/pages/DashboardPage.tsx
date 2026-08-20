@@ -19,8 +19,6 @@ import { getReports, type Report } from "@/services/reports";
 import {
   FolderOpen,
   FileText,
-  Briefcase,
-  ShieldCheck,
   Download,
   Share,
 } from "lucide-react";
@@ -151,7 +149,7 @@ export function DashboardPage() {
           <div>
             <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight mb-2">Research Command</h1>
             <p className="text-slate-500 font-medium">
-              Welcome back, {user?.name?.split(" ")[0] || "Alex"}. You have <span className="text-slate-700 font-bold">{workspaces.length} active workspaces</span> this quarter.
+              Welcome back, {user?.name?.split(" ")[0] || "Analyst"}. You have <span className="text-slate-700 font-bold">{workspaces.length} active workspaces</span> this quarter.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -174,7 +172,7 @@ export function DashboardPage() {
             icon={FolderOpen}
             iconBg="bg-purple-100"
             iconColor="text-purple-600"
-            badgeText="+2 this week"
+            badgeText={workspaces.length > 0 ? "Active" : "Ready"}
             badgeBg="bg-slate-100"
             badgeColor="text-slate-600"
           />
@@ -184,7 +182,7 @@ export function DashboardPage() {
             icon={FileText}
             iconBg="bg-orange-100"
             iconColor="text-orange-600"
-            badgeText="Up to date"
+            badgeText={reports.length > 0 ? "Up to date" : "None"}
             badgeBg="bg-slate-100"
             badgeColor="text-slate-600"
           />

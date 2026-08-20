@@ -1,8 +1,8 @@
 import { apiPost, apiGet } from "./api";
 import {
   auth,
-  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signInWithPopup,
   googleProvider,
   signOut,
@@ -47,51 +47,109 @@ export function normalizeUser(data: any): AuthUser {
   };
 }
 
-export async function syncBackendProfile(token: string, endpoint: string = "/auth/login"): Promise<AuthUser> {
-  localStorage.setItem("velsora_token", token);
-  const data = await apiPost<any>(endpoint, {});
+export async function register(payload: RegisterPayload): Promise<AuthUser> {
+  let idToken = "";
+  let firebaseUid = "";
+
+  // 1. Create account in Firebase Authentication (shows in Firebase Console)
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, payload.email, payload.password);
+    idToken = await cred.user.getIdToken();
+    firebaseUid = cred.user.uid;
+  } catch (fbErr: any) {
+    console.warn("Firebase createUser note:", fbErr.code, fbErr.message);
+    if (fbErr.code === "auth/email-already-in-use") {
+      throw new Error("An account with this email already exists in Firebase. Please sign in instead.");
+    }
+    if (fbErr.code === "auth/weak-password") {
+      throw new Error("Password is too weak. Please use at least 6 characters.");
+    }
+    if (fbErr.code === "auth/invalid-email") {
+      throw new Error("Please enter a valid email address.");
+    }
+    // If Firebase service is unavailable or rejected, proceed with backend registration
+  }
+
+  // 2. Sync with MongoDB Atlas backend database
+  const data = await apiPost<any>("/auth/register", {
+    name: payload.name,
+    email: payload.email,
+    password: payload.password,
+    firebaseUid,
+    idToken,
+  });
+
+  const activeToken = idToken || data.token;
+  if (activeToken) {
+    localStorage.setItem("velsora_token", activeToken);
+  }
   return normalizeUser(data.user || data);
 }
 
 export async function login(payload: LoginPayload): Promise<AuthUser> {
+  let idToken = "";
+
+  // 1. Authenticate with Firebase Authentication
   try {
     const cred = await signInWithEmailAndPassword(auth, payload.email, payload.password);
-    const token = await cred.user.getIdToken();
-    return await syncBackendProfile(token, "/auth/login");
-  } catch (err: any) {
-    if (auth.app.options.apiKey?.includes("demo-key")) {
-      const devToken = `dev_token_${payload.email.split("@")[0]}`;
-      return await syncBackendProfile(devToken, "/auth/login");
+    idToken = await cred.user.getIdToken();
+  } catch (fbErr: any) {
+    console.warn("Firebase signIn note:", fbErr.code, fbErr.message);
+    if (fbErr.code === "auth/wrong-password" || fbErr.code === "auth/invalid-credential") {
+      throw new Error("Invalid password or credentials. Please check and try again.");
     }
-    throw err;
+    if (fbErr.code === "auth/user-not-found") {
+      throw new Error("No user found with this email in Firebase. Please create an account.");
+    }
+    // Fallback to backend authentication if Firebase encounters domain restrictions
   }
-}
 
-export async function register(payload: RegisterPayload): Promise<AuthUser> {
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, payload.email, payload.password);
-    const token = await cred.user.getIdToken();
-    return await syncBackendProfile(token, "/auth/register");
-  } catch (err: any) {
-    if (auth.app.options.apiKey?.includes("demo-key")) {
-      const devToken = `dev_token_${payload.email.split("@")[0]}`;
-      return await syncBackendProfile(devToken, "/auth/register");
-    }
-    throw err;
+  // 2. Sync with MongoDB Atlas backend database
+  const data = await apiPost<any>("/auth/login", {
+    email: payload.email,
+    password: payload.password,
+    idToken,
+  });
+
+  const activeToken = idToken || data.token;
+  if (activeToken) {
+    localStorage.setItem("velsora_token", activeToken);
   }
+  return normalizeUser(data.user || data);
 }
 
 export async function loginWithGoogle(): Promise<AuthUser> {
   try {
     const cred = await signInWithPopup(auth, googleProvider);
-    const token = await cred.user.getIdToken();
-    return await syncBackendProfile(token, "/auth/login");
-  } catch (err: any) {
-    if (auth.app.options.apiKey?.includes("demo-key")) {
-      const devToken = `dev_token_google_user`;
-      return await syncBackendProfile(devToken, "/auth/login");
+    if (!cred.user || !cred.user.email) {
+      throw new Error("No account email returned from Google Sign-In.");
     }
-    throw err;
+    const token = await cred.user.getIdToken().catch(() => "");
+    const data = await apiPost<any>("/auth/google", {
+      email: cred.user.email,
+      name: cred.user.displayName || cred.user.email.split("@")[0],
+      avatarUrl: cred.user.photoURL || "",
+      idToken: token,
+    });
+    if (data.token) {
+      localStorage.setItem("velsora_token", data.token);
+    }
+    return normalizeUser(data.user || data);
+  } catch (err: any) {
+    console.error("Google sign-in error:", err);
+    if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") {
+      throw new Error("Google sign-in popup was closed before completing.");
+    }
+    if (err.code === "auth/unauthorized-domain") {
+      throw new Error("127.0.0.1 is not in Firebase Authorized Domains. Access via http://localhost:5173 or use Email & Password.");
+    }
+    if (err.code === "auth/operation-not-allowed" || err.code === "auth/configuration-not-found") {
+      throw new Error("Google Sign-In provider is not enabled in Firebase console. Please use Email and Password.");
+    }
+    if (err.code === "auth/popup-blocked") {
+      throw new Error("Sign-in popup was blocked by browser. Please enable popups and try again.");
+    }
+    throw new Error(err.message || "Google Sign-In failed. Please use your email and password.");
   }
 }
 

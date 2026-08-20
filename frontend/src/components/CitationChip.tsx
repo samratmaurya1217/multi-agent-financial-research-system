@@ -11,11 +11,11 @@ export function CitationChip({ citation, onClick }: CitationChipProps) {
     <button
       onClick={onClick}
       title={`"${citation.snippet}"`}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-500/25 bg-indigo-500/10 text-indigo-300 text-[11px] font-medium hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 text-[11px] font-semibold hover:bg-indigo-100 hover:border-indigo-300 transition-all shadow-sm"
     >
-      <FileText className="h-3 w-3 flex-shrink-0" />
+      <FileText className="h-3 w-3 flex-shrink-0 text-indigo-600" />
       <span className="max-w-[180px] truncate">{citation.docName}</span>
-      <span className="text-indigo-400/60">p.{citation.page}</span>
+      <span className="text-indigo-500 font-bold">p.{citation.page}</span>
     </button>
   );
 }

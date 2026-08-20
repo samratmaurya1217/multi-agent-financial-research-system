@@ -495,7 +495,7 @@ Use **PascalCase** for component files. Named exports only (`export function Foo
 
 ```
 1. Navbar (fixed)
-2. Hero Section — HeroGeometric component (full-screen)
+2. Hero Section — Modern Interactive Financial AI Hero
 3. Features Grid — 4 cards, 2×2
 4. How It Works — 3 steps, horizontal on desktop
 5. Social Proof Bar — trust signals, icon + text

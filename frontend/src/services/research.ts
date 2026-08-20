@@ -5,10 +5,14 @@ export interface Citation {
   document_id: string;
   page: number;
   snippet: string;
+  chunk_id?: string;
+  section?: string;
+  score?: number;
 
   // UI aliases
   docId: string;
   docName: string;
+  chunkId?: string;
 }
 
 export interface ChatMessage {
@@ -17,6 +21,8 @@ export interface ChatMessage {
   role: "user" | "assistant" | string;
   content: string;
   citations?: Citation[];
+  confidence?: number;
+  grounding_status?: string;
   created_at?: string;
 
   // UI aliases (zero-crash strategy)
@@ -43,13 +49,18 @@ export interface ResearchSession {
 
 export function normalizeCitation(data: any): Citation {
   const document_id = data.document_id || data.docId || "doc_01";
+  const chunk_id = data.chunk_id || data.chunkId || "";
   return {
     ...data,
     document_id,
     page: data.page !== undefined ? data.page : 1,
     snippet: data.snippet || "",
+    chunk_id,
+    section: data.section || "",
+    score: data.score !== undefined ? data.score : 1.0,
     docId: document_id,
-    docName: data.docName || data.filename || `Document ${document_id}`,
+    docName: data.docName || data.filename || data.document_name || `Document ${document_id}`,
+    chunkId: chunk_id,
   };
 }
 
@@ -66,6 +77,8 @@ export function normalizeMessage(data: any): ChatMessage {
     role: data.role || "assistant",
     content: data.content || "",
     citations,
+    confidence: data.confidence !== undefined ? data.confidence : 1.0,
+    grounding_status: data.grounding_status || "grounded",
     created_at,
     id,
     createdAt: created_at,
@@ -112,22 +125,36 @@ export async function getMessages(sessionId: string): Promise<ChatMessage[]> {
   return Array.isArray(msgs) ? msgs.map(normalizeMessage) : [];
 }
 
+export async function createSession(sessionName: string, workspaceId: string): Promise<ResearchSession> {
+  const data = await apiPost<any>("/research/sessions", {
+    session_name: sessionName,
+    workspace_id: workspaceId,
+  });
+  return normalizeSession(data);
+}
+
 export async function sendMessage(
   sessionId: string,
   content: string,
-  workspaceId?: string
+  workspaceId?: string,
+  documentId?: string,
+  documentIds?: string[]
 ): Promise<ChatMessage> {
   // Correct route: POST /research/query (SAD Section 14.8)
   const data = await apiPost<any>("/research/query", {
     workspace_id: workspaceId || sessionId,
     query: content,
     conversation_id: sessionId !== workspaceId ? sessionId : undefined,
+    document_id: documentId || undefined,
+    document_ids: documentIds && documentIds.length > 0 ? documentIds : undefined,
   });
   return normalizeMessage({
     message_id: data.message_id,
     role: "assistant",
     content: data.response,
     citations: data.citations,
+    confidence: data.confidence,
+    grounding_status: data.grounding_status,
     created_at: data.created_at,
   });
 }

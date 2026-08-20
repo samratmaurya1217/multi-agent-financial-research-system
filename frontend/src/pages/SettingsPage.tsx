@@ -81,9 +81,9 @@ export function SettingsPage() {
               {activeTab === "account" && (
                 <>
                   <h3 className="text-slate-800 font-bold text-lg mb-4">Account Information</h3>
-                  <InputRow label="Full Name" value={user?.name || "Samrat Maurya"} />
-                  <InputRow label="Email" value={user?.email || "s.sam.11221177@gmail.com"} type="email" disabled />
-                  <InputRow label="Role / Plan" value={user?.role || "Analyst Plan"} />
+                  <InputRow label="Full Name" value={user?.name || ""} />
+                  <InputRow label="Email" value={user?.email || ""} type="email" disabled />
+                  <InputRow label="Role / Plan" value={user?.role ? `${user.role} Plan` : "Analyst Plan"} />
                   
                   <div className="flex items-center justify-between py-4 border-t border-slate-100 mt-2">
                     <div>

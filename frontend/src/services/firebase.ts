@@ -12,12 +12,13 @@ import {
 } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD-demo-key-for-velsora-auth-12345",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "velsora-29767.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "velsora-29767",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "velsora-29767.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "297832292622",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:297832292622:web:abcdef1234567890",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "",
 };
 
 let app: FirebaseApp;

@@ -63,27 +63,13 @@ export async function uploadDocument(workspaceId: string, file: File): Promise<D
   const formData = new FormData();
   formData.append("file", file);
   formData.append("workspace_id", workspaceId);
-  try {
-    const data = await apiUpload<any>("/documents", formData);
-    return normalizeDocument({
-      ...data,
-      workspace_id: workspaceId,
-      filename: data.filename || file.name,
-      size_kb: data.size_kb || Math.round(file.size / 1024),
-    });
-  } catch (err) {
-    // Fallback to legacy /upload endpoint
-    const fd2 = new FormData();
-    fd2.append("file", file);
-    fd2.append("workspace_id", workspaceId);
-    const data = await apiUpload<any>("/upload", fd2);
-    return normalizeDocument({
-      ...data,
-      workspace_id: workspaceId,
-      filename: data.filename || file.name,
-      size_kb: data.size_kb || Math.round(file.size / 1024),
-    });
-  }
+  const data = await apiUpload<any>("/documents", formData);
+  return normalizeDocument({
+    ...data,
+    workspace_id: workspaceId,
+    filename: data.filename || file.name,
+    size_kb: data.size_kb || Math.round(file.size / 1024),
+  });
 }
 
 export async function deleteDocument(id: string): Promise<void> {

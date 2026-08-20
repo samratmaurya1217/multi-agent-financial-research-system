@@ -76,6 +76,13 @@ export function SignUpPage() {
 
       {/* Form matching sentence-case reference image */}
       <form onSubmit={handleSubmit} className="space-y-4 text-left">
+        {error && (
+          <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold leading-relaxed shadow-xs">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-500 mt-0.5" />
+            <p>{error}</p>
+          </div>
+        )}
+
         {fields.map(({ key, label, type, placeholder }) => (
           <div key={key}>
             <label className="block text-sm font-semibold text-[#334155] mb-1.5">
@@ -102,13 +109,6 @@ export function SignUpPage() {
             </div>
           </div>
         ))}
-
-        {error && (
-          <div className="flex items-center gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium">
-            <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-500" />
-            <p>{error}</p>
-          </div>
-        )}
 
         {/* Primary Submit Button (FintechX Blue Style) */}
         <div className="pt-2">

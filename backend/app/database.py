@@ -16,6 +16,14 @@ from pymongo.collection import Collection
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=_env_path, override=False)
 
+try:
+    import dns.resolver
+    resolver = dns.resolver.Resolver()
+    resolver.nameservers = ['8.8.8.8', '1.1.1.1']
+    dns.resolver.default_resolver = resolver
+except Exception:
+    pass
+
 logger = logging.getLogger("velsora.database")
 
 # ─── Connection URI — loaded from .env, never hardcoded ───────────────────────
@@ -71,8 +79,10 @@ def vector_chunks_col() -> Collection:
     """Collection prepared for MongoDB Atlas Vector Search embeddings & chunks."""
     return get_db()["document_chunks"]
 
-def audit_logs_col() -> Collection:
+def comparisons_col() -> Collection:
+    return get_db()["comparisons"]
 
+def audit_logs_col() -> Collection:
     return get_db()["audit_logs"]
 
 
@@ -95,6 +105,9 @@ def ensure_indexes():
 
     db["reports"].create_index([("report_id", ASCENDING)], unique=True, name="idx_reports_id")
     db["reports"].create_index([("workspace_id", ASCENDING)], name="idx_reports_workspace")
+
+    db["comparisons"].create_index([("comparison_id", ASCENDING)], unique=True, name="idx_comparisons_id")
+    db["comparisons"].create_index([("workspace_id", ASCENDING)], name="idx_comparisons_workspace")
 
     db["jobs"].create_index([("job_id", ASCENDING)], unique=True, name="idx_jobs_id")
 

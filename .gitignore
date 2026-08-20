@@ -1,43 +1,76 @@
-# ─── Secrets (NEVER commit these) ────────────────────────────────────────────
+# ─── Secrets & Environment Files (NEVER commit these) ──────────────────────
 .env
+**/.env
 .env.local
+**/.env.local
 .env.*.local
+**/.env.*.local
 
-# Keep .env.example files (they contain no real secrets)
+# Allow template examples
 !.env.example
+!**/.env.example
 
-# ─── Python ───────────────────────────────────────────────────────────────────
+# ─── Uploaded Filings & Generated Reports (User Data) ─────────────────────────
+uploaded_filings/
+**/uploaded_filings/
+backend/uploaded_filings/
+*.pdf
+
+# ─── Python & Virtual Environments ───────────────────────────────────────────
 __pycache__/
+**/__pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
 *.egg-info/
-dist/
-build/
 .eggs/
+build/
+dist/
 venv/
 .venv/
 env/
-*.egg
+**/venv/
+**/.venv/
+**/env/
+.pytest_cache/
+.coverage
+htmlcov/
 
-# ─── Node / Frontend ──────────────────────────────────────────────────────────
+# ─── Node & Frontend Builds ──────────────────────────────────────────────────
 node_modules/
+**/node_modules/
 dist/
+**/dist/
 .cache/
-*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# ─── OS / Editor ──────────────────────────────────────────────────────────────
+# ─── Database & Vector Storage ────────────────────────────────────────────────
+chroma_db/
+**/chroma_db/
+backend/chroma_db/
+*.sqlite3
+*.db
+
+# ─── Logs & Temp Files ────────────────────────────────────────────────────────
+*.log
+logs/
+**/logs/
+tmp/
+temp/
+
+# ─── IDE, OS & Agent Artifacts ───────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
 .idea/
 .vscode/settings.json
+.gemini/
 
-# ─── Project-specific ─────────────────────────────────────────────────────────
-backend/uploaded_filings/
-backend/chroma_db/
-backend/__pycache__/
-
-# ─── SAD (large binary) ───────────────────────────────────────────────────────
-Multi-Agent_Financial_Research_System_SAD (5).md
+# ─── Project Docs & Large Binaries ───────────────────────────────────────────
+Multi-Agent_Financial_Research_System_SAD*.md
+project doc/
