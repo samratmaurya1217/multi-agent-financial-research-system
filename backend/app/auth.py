@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 auth.py — Production Authentication & User Identity Management.
 Supports Native HS256 JWTs, Secure Bcrypt Password Hashing, Google Firebase ID Tokens,

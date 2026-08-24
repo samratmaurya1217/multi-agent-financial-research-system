@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 database.py — MongoDB Atlas connection for Velsora Multi-Agent Financial Research System
 All credentials are loaded from the .env file via python-dotenv.

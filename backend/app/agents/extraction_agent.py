@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 extraction_agent.py — Extraction Agent (SAD Section 7.2 & 9.2.1)
 Powered by LangGraph, Groq LLM (with multi-model & Gemini failovers), and MongoDB Atlas.

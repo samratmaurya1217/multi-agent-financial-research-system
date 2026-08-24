@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 report_agent.py — Report Agent (SAD Section 7.6 & Milestone 4)
 Compiles outputs from Extraction, Red Flag, Comparison, and Research agents into a

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 pipeline.py — Multi-Agent Orchestration & Pipeline Engine (SAD Chapter 6 & Section 6.8/6.9)
 Coordinates Document Agent, Extraction Agent, and Red Flag Agent in strict sequence.

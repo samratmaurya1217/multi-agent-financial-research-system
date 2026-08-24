@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 main.py — Velsora Multi-Agent Financial Research System
 FastAPI backend fully integrated with MongoDB Atlas.

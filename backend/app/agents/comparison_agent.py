@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 comparison_agent.py — Comparison Agent (SAD Section 7.4 & FR-CMP-01/02/03)
 Powered by LangGraph, MultiProviderLLMClient (Nemotron 3 Ultra -> Gemini -> Groq), and MongoDB Atlas.

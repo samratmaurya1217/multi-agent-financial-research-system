@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 document_agent.py — Document Agent Pipeline (SAD Section 7.1 & 10.1–10.6)
 Powered by LangGraph, LangChain, PyMuPDF, SentenceTransformers, and MongoDB Atlas.

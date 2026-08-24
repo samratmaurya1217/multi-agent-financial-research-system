@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 llm_client.py — Provider-Agnostic LLM Abstraction Layer (SAD Section 5.16)
 Decouples agent logic from specific model providers with a unified response contract.

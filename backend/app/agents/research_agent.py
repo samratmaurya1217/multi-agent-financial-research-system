@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# research_agent.py — Conversational Research Agent with Hybrid RAG & SSE Streaming
 
 import os
 import re

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 red_flag_agent.py — Advanced Evidence-Based Financial Red Flag Agent
 Implements a multi-stage, high-reasoning, evidence-grounded risk detection pipeline:

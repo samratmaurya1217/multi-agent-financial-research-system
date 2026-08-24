@@ -8,6 +8,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4+-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Vite](https://img.shields.io/badge/Vite-6.0+-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Velsora** is an autonomous multi-agent financial intelligence and research platform engineered to ingest, parse, extract, evaluate, compare, and generate analyst-grade insights from corporate financial filings (10-K, 10-Q, 8-K, Annual Reports, and Earnings Transcripts). 
 
@@ -461,6 +462,18 @@ Every database query strictly enforces workspace boundary checks. Documents, vec
 
 - **Samrat Maurya** ([@samratmaurya1217](https://github.com/samratmaurya1217))
 - **Team 2** — Infosys Springboard Virtual Internship 7.0
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for the full text.
+
+SPDX-License-Identifier: `MIT`
+
+Copyright (c) 2026 Samrat Maurya and Velsora Contributors
+
+> **Note on third-party dependencies**: This project depends on third-party packages that carry their own licenses (FastAPI/MIT, LangChain/MIT, PyMuPDF/AGPL-3.0, sentence-transformers/Apache-2.0, etc.). The MIT license in this repository applies exclusively to the original source code authored by the Velsora contributors. Dependency licenses are unaffected and remain intact within their respective distribution packages.
 
 ---
 

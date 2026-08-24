@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 rag.py — Advanced Hybrid Retrieval & RRF Reranking Engine (SAD Chapter 10)
 Combines Dense Vector Search (SentenceTransformer) + Sparse BM25 / Keyword Retrieval
