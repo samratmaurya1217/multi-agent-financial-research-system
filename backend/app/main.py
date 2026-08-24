@@ -249,14 +249,30 @@ async def upload_financial_document(
 
 # ─── Auth Service (SAD Section 14.4) ─────────────────────────────────────────
 
+def _authenticate_pdf_request(token: Optional[str], authorization: Optional[str]) -> dict:
+    raw_token = None
+    if isinstance(token, str) and token.strip():
+        raw_token = token.strip()
+    elif isinstance(authorization, str) and authorization.strip():
+        if authorization.startswith("Bearer "):
+            raw_token = authorization.split("Bearer ")[1].strip()
+        else:
+            raw_token = authorization.strip()
+    if not raw_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication token required for report access."
+        )
+    claims = verify_token(authorization=f"Bearer {raw_token}", token=None)
+    return get_current_user(claims)
+
+
 @app.post("/auth/login")
 def auth_login(
     payload: Optional[AuthLogin] = None,
     authorization: Optional[str] = Header(None)
 ):
-    email = payload.email.lower().strip() if payload and payload.email else ""
-    
-    if not email and authorization:
+    if authorization and (not payload or not payload.email):
         user = get_current_user(verify_token(authorization=authorization))
         token = create_jwt_token({
             "uid": user["user_id"],
@@ -265,54 +281,33 @@ def auth_login(
             "name": user.get("name", "Analyst"),
             "workspaceId": user.get("workspaceId", f"ws_{user['user_id'][4:]}")
         })
+        user_out = _strip_mongo(user.copy())
+        user_out.pop("password", None)
         return {
             "status": "success",
             "token": token,
-            "user": _strip_mongo(user),
+            "user": user_out,
             "workspaceId": user.get("workspaceId"),
         }
 
-    if not email:
-        email = "analyst@velsora.ai"
+    if not payload or not payload.email or not payload.email.strip():
+        raise HTTPException(status_code=400, detail="Email is required for login.")
 
+    email = payload.email.lower().strip()
     user_doc = users_col().find_one({"email": email})
-    now = _now()
     if not user_doc:
-        clean_suffix = email.split("@")[0].replace(".", "_")[:12]
-        user_id = f"usr_{clean_suffix}"
-        workspace_id = f"ws_{clean_suffix}"
-        name = email.split("@")[0].capitalize()
-        user_doc = {
-            "user_id": user_id,
-            "email": email,
-            "displayName": name,
-            "name": name,
-            "password": hash_password(payload.password) if (payload and payload.password) else "",
-            "workspaceId": workspace_id,
-            "role": "Analyst",
-            "provider": "password",
-            "created_at": now,
-            "updated_at": now,
-        }
-        users_col().insert_one(user_doc)
-        if not workspaces_col().find_one({"workspace_id": workspace_id}):
-            workspaces_col().insert_one({
-                "workspace_id": workspace_id,
-                "user_id": user_id,
-                "name": f"{name}'s Research Workspace",
-                "description": "Primary isolated research workspace",
-                "document_manifest": [],
-                "documents": [],
-                "status": "active",
-                "created_at": now,
-                "updated_at": now,
-            })
-    else:
-        if user_doc.get("password") and payload and payload.password:
-            if not verify_password(payload.password, user_doc["password"]):
-                raise HTTPException(status_code=400, detail="Invalid password. Please verify your credentials.")
+        raise HTTPException(
+            status_code=400,
+            detail="Account not found. Please register a new account or verify your credentials."
+        )
 
-    workspace_id = user_doc.get("workspaceId") or f"ws_{user_doc['user_id'][4:]}"
+    if user_doc.get("password"):
+        if not payload.password:
+            raise HTTPException(status_code=400, detail="Password is required.")
+        if not verify_password(payload.password, user_doc["password"]):
+            raise HTTPException(status_code=400, detail="Invalid password. Please verify your credentials.")
+
+    workspace_id = user_doc.get("workspaceId") or f"ws_{user_doc['user_id'].replace('usr_', '')[:12]}"
     token = create_jwt_token({
         "uid": user_doc["user_id"],
         "user_id": user_doc["user_id"],
@@ -321,27 +316,37 @@ def auth_login(
         "workspaceId": workspace_id,
     })
 
+    user_out = _strip_mongo(user_doc.copy())
+    user_out.pop("password", None)
+
     return {
         "status": "success",
         "token": token,
-        "user": _strip_mongo(user_doc),
+        "user": user_out,
         "workspaceId": workspace_id,
     }
 
 
 @app.post("/auth/register")
 def auth_register(payload: AuthRegister):
-    email = payload.email.lower().strip()
+    email = payload.email.lower().strip() if payload.email else ""
     if not email:
         raise HTTPException(status_code=400, detail="Email is required.")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+
+    if not payload.firebaseUid:
+        if not payload.password or len(payload.password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
 
     existing = users_col().find_one({"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists. Please log in.")
 
     clean_suffix = email.split("@")[0].replace(".", "_")[:12]
-    user_id = f"usr_{clean_suffix}_{uuid.uuid4().hex[:4]}"
-    workspace_id = f"ws_{clean_suffix}_{uuid.uuid4().hex[:4]}"
+    uid_hex = uuid.uuid4().hex[:4]
+    user_id = f"usr_{clean_suffix}_{uid_hex}"
+    workspace_id = f"ws_{clean_suffix}_{uid_hex}"
     name = payload.name.strip() if payload.name else email.split("@")[0].capitalize()
     now = _now()
 
@@ -380,10 +385,13 @@ def auth_register(payload: AuthRegister):
         "workspaceId": workspace_id,
     })
 
+    user_out = _strip_mongo(user_doc.copy())
+    user_out.pop("password", None)
+
     return {
         "status": "success",
         "token": token,
-        "user": _strip_mongo(user_doc),
+        "user": user_out,
         "workspaceId": workspace_id,
     }
 
@@ -447,10 +455,13 @@ def auth_google(payload: AuthGoogle):
         "workspaceId": workspace_id,
     })
 
+    user_out = _strip_mongo(user_doc.copy())
+    user_out.pop("password", None)
+
     return {
         "status": "success",
         "token": token,
-        "user": _strip_mongo(user_doc),
+        "user": user_out,
         "workspaceId": workspace_id,
     }
 
@@ -461,7 +472,9 @@ def auth_logout():
 
 @app.get("/auth/me")
 def auth_me(user: dict = Depends(get_current_user)):
-    return _strip_mongo(user)
+    user_out = _strip_mongo(user.copy())
+    user_out.pop("password", None)
+    return user_out
 
 # ─── Workspace Service (SAD Section 14.5) ─────────────────────────────────────
 
@@ -471,9 +484,12 @@ def get_workspaces(user: dict = Depends(get_current_user)):
     ws_id = user.get("workspaceId")
     email = user.get("email", "").lower().strip()
     
-    query = {"$or": [{"user_id": user_id}, {"workspace_id": ws_id}]}
-    if email == "s.sam.11221177@gmail.com":
-        query["$or"].append({"workspace_id": {"$in": ["ws_apple2024", "ws_tsla_ford", "ws_msft2023", "ws_amzn_risk", "ws_O3RqiuXv"]}})
+    query = {"$or": [
+        {"user_id": user_id},
+        {"workspace_id": ws_id},
+        {"members": user_id},
+        {"members": email},
+    ]}
         
     docs = list(workspaces_col().find(query))
     if not docs and ws_id:
@@ -511,7 +527,8 @@ def create_workspace(payload: WorkspaceCreate, user: dict = Depends(get_current_
     return _strip_mongo(ws_obj)
 
 @app.get("/workspaces/{workspace_id}")
-def get_workspace(workspace_id: str, ws_id: str = Depends(get_user_workspace)):
+def get_workspace(workspace_id: str, user: dict = Depends(get_current_user)):
+    ws_id = get_user_workspace(user, workspace_id)
     w = workspaces_col().find_one({"workspace_id": ws_id})
     if not w:
         raise HTTPException(status_code=404, detail="Workspace not found.")
@@ -521,14 +538,20 @@ def get_workspace(workspace_id: str, ws_id: str = Depends(get_user_workspace)):
     return w
 
 @app.delete("/workspaces/{workspace_id}")
-def delete_workspace(workspace_id: str, ws_id: str = Depends(get_user_workspace)):
+def delete_workspace(workspace_id: str, user: dict = Depends(get_current_user)):
+    ws_id = get_user_workspace(user, workspace_id)
     workspaces_col().delete_one({"workspace_id": ws_id})
+    documents_col().delete_many({"workspace_id": ws_id})
+    conversations_col().delete_many({"workspace_id": ws_id})
+    reports_col().delete_many({"workspace_id": ws_id})
+    comparisons_col().delete_many({"workspace_id": ws_id})
     return {"status": "success", "deleted_id": ws_id}
 
 # ─── Document Service (SAD Section 14.6) ─────────────────────────────────────
 
 @app.get("/documents")
-def get_documents(workspace_id: Optional[str] = Query(None), ws_id: str = Depends(get_user_workspace)):
+def get_documents(workspace_id: Optional[str] = Query(None), user: dict = Depends(get_current_user)):
+    ws_id = get_user_workspace(user, workspace_id)
     docs = list(documents_col().find({"workspace_id": ws_id}))
     return [_strip_mongo(d) for d in docs]
 
@@ -540,7 +563,7 @@ async def upload_document_sad(
     workspace_id: Optional[str] = Form(None),
     user: dict = Depends(get_current_user)
 ):
-    ws_id = workspace_id or user.get("workspaceId") or f"ws_{user.get('firebaseUid', 'analyst')[:8]}"
+    ws_id = get_user_workspace(user, workspace_id)
     if not workspaces_col().find_one({"workspace_id": ws_id}):
         now = _now()
         workspaces_col().insert_one({
@@ -600,6 +623,10 @@ async def upload_document_sad(
 @app.get("/documents/{document_id}/red_flags")
 def get_document_red_flags(document_id: str, user: dict = Depends(get_current_user)):
     from app.database import get_db
+    doc = documents_col().find_one({"document_id": document_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    get_user_workspace(user, doc.get("workspace_id"))
     doc_rf = get_db()["red_flags"].find_one({"document_id": document_id})
     if doc_rf:
         return _strip_mongo(doc_rf)
@@ -614,8 +641,9 @@ def get_document_red_flags(document_id: str, user: dict = Depends(get_current_us
 def get_document_extraction(document_id: str, user: dict = Depends(get_current_user)):
     from app.database import get_db
     doc = documents_col().find_one({"document_id": document_id})
-    if doc:
-        get_user_workspace(user, doc.get("workspace_id"))
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    get_user_workspace(user, doc.get("workspace_id"))
     metrics_doc = get_db()["extracted_metrics"].find_one({"document_id": document_id})
     metrics = metrics_doc.get("metrics", []) if metrics_doc else []
         
@@ -627,14 +655,19 @@ def get_document_extraction(document_id: str, user: dict = Depends(get_current_u
 
 @app.delete("/documents/{document_id}")
 def delete_document(document_id: str, user: dict = Depends(get_current_user)):
+    from app.database import get_db
     doc = documents_col().find_one({"document_id": document_id})
-    if doc:
-        get_user_workspace(user, doc.get("workspace_id"))
-        workspaces_col().update_one(
-            {"workspace_id": doc.get("workspace_id")},
-            {"$pull": {"document_manifest": document_id}}
-        )
-        documents_col().delete_one({"document_id": document_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    get_user_workspace(user, doc.get("workspace_id"))
+    workspaces_col().update_one(
+        {"workspace_id": doc.get("workspace_id")},
+        {"$pull": {"document_manifest": document_id}}
+    )
+    documents_col().delete_one({"document_id": document_id})
+    get_db()["document_chunks"].delete_many({"document_id": document_id})
+    get_db()["extracted_metrics"].delete_many({"document_id": document_id})
+    get_db()["red_flags"].delete_many({"document_id": document_id})
     return {"status": "success", "deleted_id": document_id}
 
 # ─── Research / Chat Service (SAD Section 14.8) ───────────────────────────────
@@ -778,7 +811,8 @@ async def research_stream(payload: ResearchQuery, user: dict = Depends(get_curre
 
 @app.get("/research/history")
 @app.get("/chat-history")
-def get_research_history(workspace_id: Optional[str] = Query(None), ws_id: str = Depends(get_user_workspace)):
+def get_research_history(workspace_id: Optional[str] = Query(None), user: dict = Depends(get_current_user)):
+    ws_id = get_user_workspace(user, workspace_id)
     convs = list(conversations_col().find({"workspace_id": ws_id}).sort("updated_at", -1))
     return [_strip_mongo(c) for c in convs]
 
@@ -820,8 +854,9 @@ def create_comparison(payload: ComparisonRequest, user: dict = Depends(get_curre
     return _strip_mongo(result)
 
 @app.get("/comparisons")
-def list_comparisons(workspace_id: Optional[str] = Query(None), ws_id: str = Depends(get_user_workspace)):
+def list_comparisons(workspace_id: Optional[str] = Query(None), user: dict = Depends(get_current_user)):
     """List all persisted comparison records for the active workspace."""
+    ws_id = get_user_workspace(user, workspace_id)
     cmps = list(comparisons_col().find({"workspace_id": ws_id}).sort("created_at", -1))
     return [_strip_mongo(c) for c in cmps]
 
@@ -838,17 +873,19 @@ def get_comparison(comparison_id: str, user: dict = Depends(get_current_user)):
 
 @app.get("/reports")
 def get_reports(workspace_id: Optional[str] = Query(None), user: dict = Depends(get_current_user)):
-    email = user.get("email", "").lower().strip()
     if workspace_id and workspace_id != "all":
         ws_id = get_user_workspace(user, workspace_id)
         rpts = list(reports_col().find({"workspace_id": ws_id}).sort("generated_at", -1))
     else:
         user_ws = user.get("workspaceId") or f"ws_{user.get('user_id', 'analyst')[:8]}"
         user_id = user.get("user_id")
-        query_ws = {"$or": [{"user_id": user_id}, {"workspace_id": user_ws}]}
-        if email == "s.sam.11221177@gmail.com":
-            query_ws["$or"].append({"workspace_id": {"$in": ["ws_apple2024", "ws_tsla_ford", "ws_msft2023", "ws_amzn_risk", "ws_O3RqiuXv"]}})
-            
+        email = user.get("email", "").lower().strip()
+        query_ws = {"$or": [
+            {"user_id": user_id},
+            {"workspace_id": user_ws},
+            {"members": user_id},
+            {"members": email},
+        ]}
         allowed_workspaces = [w["workspace_id"] for w in workspaces_col().find(query_ws)]
         if user_ws not in allowed_workspaces:
             allowed_workspaces.append(user_ws)
@@ -888,10 +925,16 @@ def get_report_status(report_id: str, user: dict = Depends(get_current_user)):
     return _strip_mongo(r)
 
 @app.get("/reports/{report_id}/download")
-def download_report(report_id: str, token: Optional[str] = Query(None), auth_header: Optional[str] = Header(None, alias="Authorization")):
+def download_report(
+    report_id: str,
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None)
+):
+    user = _authenticate_pdf_request(token, authorization)
     r = reports_col().find_one({"report_id": report_id})
     if not r:
         raise HTTPException(status_code=404, detail="Report not found.")
+    get_user_workspace(user, r.get("workspace_id"))
     
     project_root = Path(__file__).resolve().parents[2]
     backend_root = Path(__file__).resolve().parents[1]
@@ -937,10 +980,16 @@ def download_report(report_id: str, token: Optional[str] = Query(None), auth_hea
     raise HTTPException(status_code=404, detail="PDF report could not be generated or located.")
 
 @app.get("/reports/{report_id}/pdf")
-def stream_report_pdf(report_id: str, token: Optional[str] = Query(None), auth_header: Optional[str] = Header(None, alias="Authorization")):
+def stream_report_pdf(
+    report_id: str,
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None)
+):
+    user = _authenticate_pdf_request(token, authorization)
     r = reports_col().find_one({"report_id": report_id})
     if not r:
         raise HTTPException(status_code=404, detail="Report not found.")
+    get_user_workspace(user, r.get("workspace_id"))
     
     project_root = Path(__file__).resolve().parents[2]
     backend_root = Path(__file__).resolve().parents[1]

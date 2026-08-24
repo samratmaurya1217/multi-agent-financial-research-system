@@ -1,45 +1,48 @@
-# 📈 Velsora — The Multi-Agent Financial Research Platform
+# 📈 Velsora — Multi-Agent Financial Research System
 
-[![React](https://img.shields.io/badge/React-18.0+-blue.svg)](https://reactjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![LangGraph](<https://img.shields.io/badge/LangGraph-AI%20Orchestration-orange.svg>)](https://python.langchain.com/docs/langgraph)
-[![MongoDB](<https://img.shields.io/badge/MongoDB-Atlas%20Vector%20Search-success.svg>)](https://mongodb.com/)
-[![Python](https://img.shields.io/badge/Python-3.10+-yellow.svg)](https://python.org/)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-purple.svg)](https://openai.com/)
+[![React](https://img.shields.io/badge/React-18.0+-61DAFB?logo=react&logoColor=black)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-AI%20Orchestration-FF6B6B)](https://python.langchain.com/docs/langgraph)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas%20Vector%20Search-47A248?logo=mongodb&logoColor=white)](https://mongodb.com/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4+-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Vite](https://img.shields.io/badge/Vite-6.0+-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 
-**Velsora** is an AI-powered platform where a team of specialized AI agents collaborate to read, analyze, and generate insights from real company financial documents. Designed as a pilot-scale solution, it enforces **strict source grounding** (every insight is traceable to source documents) and features **automatic multi-agent triggering** to streamline the extraction, red-flag detection, comparison, and reporting processes.
+**Velsora** is an autonomous multi-agent financial intelligence and research platform engineered to ingest, parse, extract, evaluate, compare, and generate analyst-grade insights from corporate financial filings (10-K, 10-Q, 8-K, Annual Reports, and Earnings Transcripts). 
+
+By combining **LangGraph-driven multi-agent orchestration**, **MongoDB Atlas Vector Search**, and **strict source grounding**, Velsora eliminates LLM hallucinations, enforces deterministic financial sanity checks, and automates end-to-end investment research workflows.
 
 ---
 
-## 🌟 Key Features
+## 📑 Table of Contents
 
-### 📄 Intelligent Document Ingestion & Parsing
+- [Core Value Proposition](#-core-value-proposition)
+- [System Architecture](#-system-architecture)
+- [Multi-Agent Intelligence Network](#-multi-agent-intelligence-network)
+- [Key Features](#-key-features)
+- [Project Directory Structure](#-project-directory-structure)
+- [API Reference](#-api-reference)
+- [Security & Grounding Architecture](#-security--grounding-architecture)
+- [Getting Started & Installation](#-getting-started--installation)
+  - [Prerequisites](#prerequisites)
+  - [Backend Setup](#1-backend-setup)
+  - [Frontend Setup](#2-frontend-setup)
+  - [Database & Vector Index Setup](#3-mongodb-atlas-configuration)
+- [Environment Configuration Reference](#-environment-configuration-reference)
 
-- **Multi-Format Support** — Upload financial filings in PDF, DOCX, and TXT formats (up to 50MB).
-- **Advanced OCR & Chunking** — Page-boundary aware text extraction with automatic OCR fallback for scanned documents.
-- **Semantic Vector Indexing** — Automated embedding generation and vector indexing using MongoDB Atlas Vector Search for precise retrieval.
+---
 
-### 🤖 Multi-Agent Intelligence
+## 💡 Core Value Proposition
 
-- **6 Specialized Agents** — Document, Extraction, Red Flag, Comparison, Research, and Report Agents.
-- **Metric Extraction Engine** — Automatically pulls revenue, EBITDA, EPS, and other key ratios with exact source citations.
-- **Red Flag Classifier** — Detects and categorizes risks (Liquidity, Profitability, Governance) with low-to-critical severity levels.
-- **Conversational Research Assistant** — Answers multi-part queries with step-by-step reasoning, RAG context, and strict grounding validation.
-- **Automated Report Generation** — Compiles cross-agent analytics into structured, analyst-style PDF reports.
+Financial analysis demands precision, transparency, and strict accountability. Standard general-purpose LLMs struggle with hallucinations, arithmetic errors, and vague source references. 
 
-### ⚙️ Orchestration & State Management
-
-- **Event-Driven Pipelines** — Pipeline triggers automatically upon document upload without blocking the UI.
-- **Durable Handoffs** — Stateful LangGraph orchestrator ensures intermediate agent outputs are persisted in MongoDB.
-- **Fault Tolerance & Recovery** — Bounded retry policies, exponential backoff, and graceful degradation strategies for LLM timeouts.
-- **Tool Registry Access** — Agents are restricted to specific capability-based tools (e.g., `vector_search`, `pdf_parse`, `schema_validate`).
-
-### 🔒 Security, Trust & Grounding
-
-- **Strict Source Grounding** — The system guarantees every insight is backed by a specific page/chunk in the source documents.
-- **Zero-Tolerance Hallucination Checks** — The Research Agent refuses to answer if relevant source material is unavailable.
-- **Prompt Injection Defense** — Rigorous input validation before expensive LLM calls.
-- **Role-Based Access Control** — Secure workspaces managed via JWT authentication for Admins, Analysts, and Viewers.
+Velsora solves these limitations through:
+1. **Strict Source Grounding** — Every metric, ratio, risk, and qualitative answer is linked directly to a verifiable document chunk and page number.
+2. **Hybrid RAG & Vector Search** — Combines dense semantic vector embeddings (`all-MiniLM-L6-v2`, 384-dim) with lexical keyword matching (BM25) inside MongoDB Atlas.
+3. **Deterministic Financial Verification** — Validates balance sheet formulas, cash flow reconciliations, and ratio boundaries with Python math rules prior to LLM reasoning.
+4. **Resilient Multi-Agent Pipelines** — Dedicated autonomous agents execute specialized tasks with durable MongoDB state handoffs and retry mechanisms.
+5. **Analyst-Ready Reporting** — Generates structured executive PDF reports with automated balance sheet tables, risk matrices, and comparison sidebars.
 
 ---
 
@@ -47,134 +50,418 @@
 
 ```mermaid
 graph TB
-    subgraph Frontend["Frontend (React 18 + TS)"]
-        UI["Workspace / Dashboard"]
-        UP["Upload & Ingestion"]
-        CH["Conversational Chat"]
-        REP["Report Viewer"]
+    subgraph Client["Frontend Client (React 18 + TypeScript + Vite)"]
+        UI["Workspace Dashboard"]
+        UP["Document Ingestion Center"]
+        CH["Streaming Research Assistant (SSE)"]
+        CMP["Side-by-Side Comparison Engine"]
+        REP["Audit Report Viewer & PDF Exporter"]
     end
 
-    subgraph Backend["Backend (FastAPI)"]
-        SRV["API Gateway (REST + SSE)"]
-
-        subgraph AI["AI Engine (LangGraph)"]
-            ORC["Orchestrator"]
-            AGT["Agents (6 Roles)"]
-            OAI["LLM Provider (OpenAI/Anthropic)"]
-            TL["Tool Registry"]
+    subgraph Backend["Backend Gateway (FastAPI ASGI)"]
+        ROUTERS["API Endpoints (/auth, /documents, /research, /comparisons, /reports)"]
+        AUTH_MW["JWT (HS256) & Firebase (RS256) Auth"]
+        VAL_GUARD["Prompt Injection Defense & Input Sanitizer"]
+        
+        subgraph Orchestration["Agent Execution Engine (LangGraph)"]
+            GRAPH["StateGraph Orchestrator"]
+            A_DOC["Document Ingestion Agent"]
+            A_EXT["Metric Extraction Agent"]
+            A_RED["Forensic Red Flag Agent"]
+            A_CMP["Peer Comparison Agent"]
+            A_RES["Conversational Research Agent"]
+            A_RPT["Executive Report Agent"]
         end
 
-        subgraph Core["Core Services"]
-            AUTH["JWT Auth & RBAC"]
-            VAL["Validation & Injection Defense"]
+        subgraph LLM_Gateway["Provider-Agnostic LLM Layer"]
+            ROUTER_LLM["LLM Gateway / Router"]
+            OAI["NVIDIA Nemotron 3 Ultra (Primary)"]
+            GEM["Google Gemini 2.5 (Fallback 1)"]
+            GRQ["Groq LLaMA 3.3 (Fallback 2)"]
         end
     end
 
-    subgraph Storage["Data Layer"]
-        MDB[("MongoDB (State, Users)")]
-        VDB[("Atlas Vector Search")]
-        OBJ["Object Storage (S3/MinIO)"]
-        RED["Redis (Queue/Cache)"]
+    subgraph Data["Persistence Layer (MongoDB Atlas)"]
+        MDB_DOCS[("documents & document_chunks")]
+        MDB_VECTOR[("Atlas Vector Search (384-dim)")]
+        MDB_STATE[("workspaces & users")]
+        MDB_KNOW[("extracted_metrics & red_flags")]
+        MDB_OUT[("conversations, comparisons & reports")]
     end
 
-    UI --> SRV
-    UP --> SRV
-    CH --> SRV
-    REP --> SRV
+    UI --> ROUTERS
+    UP --> ROUTERS
+    CH --> ROUTERS
+    CMP --> ROUTERS
+    REP --> ROUTERS
 
-    SRV --> ORC
-    SRV --> AUTH
-    SRV --> VAL
-  
-    ORC --> AGT
-    AGT --> OAI
-    AGT --> TL
-  
-    SRV --> RED
-    RED --> ORC
-  
-    ORC --> MDB
-    AGT --> MDB
-    AGT --> VDB
-    UP --> OBJ
+    ROUTERS --> AUTH_MW
+    AUTH_MW --> VAL_GUARD
+    VAL_GUARD --> GRAPH
+
+    GRAPH --> A_DOC
+    GRAPH --> A_EXT
+    GRAPH --> A_RED
+    GRAPH --> A_CMP
+    GRAPH --> A_RES
+    GRAPH --> A_RPT
+
+    A_DOC --> MDB_DOCS
+    A_DOC --> MDB_VECTOR
+    A_EXT --> MDB_KNOW
+    A_RED --> MDB_KNOW
+    A_CMP --> MDB_OUT
+    A_RES --> MDB_OUT
+    A_RPT --> MDB_OUT
+
+    A_DOC & A_EXT & A_RED & A_CMP & A_RES & A_RPT --> ROUTER_LLM
+    ROUTER_LLM --> OAI
+    ROUTER_LLM --> GEM
+    ROUTER_LLM --> GRQ
+
+    A_RES --> MDB_VECTOR
+    GRAPH --> MDB_STATE
 ```
 
 ---
 
-## 🧠 AI Architecture
+## 🤖 Multi-Agent Intelligence Network
 
-The AI architecture strictly enforces separation of concerns. Instead of a single monolithic prompt, tasks are delegated to a set of specialized, highly cohesive agents.
+Velsora divides complex financial analysis across six purpose-built agents to ensure separation of concerns, high domain accuracy, and auditability:
 
 ```mermaid
 flowchart LR
-    subgraph Pipeline["Automated Ingestion Pipeline"]
-        A1[Document Agent] -->|Parses & Indexes| A2[Extraction Agent]
-        A2 -->|Extracts Metrics| A3[Red Flag Agent]
-    end
-  
-    subgraph AdHoc["Ad-Hoc / User-Triggered"]
-        B1[Comparison Agent]
-        B2[Research Agent]
-    end
-  
-    subgraph Export["Output Pipeline"]
-        C1[Report Agent]
+    subgraph Ingestion["1. Automated Pipeline (On Upload)"]
+        A1["📄 Document Agent<br/>• Layout Parsing<br/>• Sliding-Window Chunking<br/>• Vector Indexing"] 
+        --> A2["📊 Extraction Agent<br/>• Revenue, EBITDA, EPS<br/>• Balance Sheet Ratios<br/>• Citation Grounding"]
+        --> A3["🚩 Red Flag Agent<br/>• Deterministic Scans<br/>• Forensic Risk Detection<br/>• Severity Scoring"]
     end
 
-    A1 -.-> C1
-    A2 -.-> C1
+    subgraph OnDemand["2. Interactive & Analytical Engines"]
+        B1["⚖️ Comparison Agent<br/>• Multi-Company Peers<br/>• Delta Calculations<br/>• Variance Synthesis"]
+        B2["💬 Research Agent<br/>• Hybrid RAG QA<br/>• Real-time SSE Stream<br/>• Citation Pill Delivery"]
+    end
+
+    subgraph Output["3. Executive Delivery"]
+        C1["📑 Report Agent<br/>• Multi-Section Synthesis<br/>• PDF Compilation<br/>• Audit Trail Export"]
+    end
+
+    A3 -.-> B1
+    A3 -.-> B2
     A3 -.-> C1
     B1 -.-> C1
 ```
 
+### Agent Breakdown
+
+| Agent | Core Responsibilities | Key Technologies & Output |
+| :--- | :--- | :--- |
+| **📄 Document Agent** | Ingests PDF, DOCX, TXT filings; performs text normalization, structural token chunking (500-token windows with 100-token overlap), and generates 384-dim dense embeddings. | `pypdf`, `sentence-transformers` (`all-MiniLM-L6-v2`), MongoDB `document_chunks` collection. |
+| **📊 Extraction Agent** | Identifies standard GAAP/IFRS line items (Revenue, Net Income, Gross Margin, Operating Margin, Debt-to-Equity, Free Cash Flow, Current Ratio) and attaches exact page/chunk coordinates. | Structured JSON schemas, regex pre-filters, LLM structured extraction, MongoDB `extracted_metrics`. |
+| **🚩 Red Flag Agent** | 7-stage forensic risk pipeline: deterministic balance sheet sanity checks, domain-segmented semantic retrieval, candidate generation, adversarial recall passes, and precision verification across 5 risk domains. | Severity classification (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), confidence metrics, MongoDB `red_flags`. |
+| **⚖️ Comparison Agent** | Performs automated side-by-side benchmarking across multiple corporate filings or fiscal periods, calculating absolute and percentage variances for margins, liquidity, and growth. | Normalized financial comparison matrices, executive comparative summaries, MongoDB `comparisons`. |
+| **💬 Research Agent** | Multi-turn conversational research assistant answering open-ended financial questions with hybrid RAG retrieval, zero-hallucination guardrails, and real-time Server-Sent Events (SSE) streaming. | Streaming SSE tokens, interactive citation chips (`[DocID, Page N]`), conversation memory. |
+| **📑 Report Agent** | Aggregates all extracted metrics, detected red flags, comparative insights, and strategic commentary into formal, publication-ready research reports. | ReportLab PDF compilation, executive summary generation, MongoDB `reports`. |
+
 ---
 
-## ⚙️ AI Orchestration
+## 🌟 Key Features
 
-Agent orchestration relies on stateful graphs to manage durable handoffs, retries, and graceful degradations. Each handoff is persisted via the database.
+### 1. Document Ingestion & Vector Indexing
+- Supports standard financial filings in PDF, DOCX, and TXT format (up to 50MB per document).
+- Automatic text cleanup and page-aware chunking preserving tabular alignment and section headings.
+- Real-time indexing into MongoDB Atlas with cosine vector similarity search.
 
-```mermaid
-stateDiagram-v2
-    [*] --> IngestionTriggered
-    IngestionTriggered --> DocumentAgent
-  
-    DocumentAgent --> ExtractionAgent : Document Parsed & Indexed
-    DocumentAgent --> Failed : Parsing Error
-  
-    ExtractionAgent --> RedFlagAgent : Metrics Persisted
-    ExtractionAgent --> RedFlagAgent : Partial Failure (Degraded)
-  
-    RedFlagAgent --> PipelineComplete : Flags Detected & Persisted
-  
-    PipelineComplete --> [*]
-    Failed --> [*]
-  
-    state ExtractionAgent {
-        [*] --> ExtractMetrics
-        ExtractMetrics --> ValidateCitations
-        ValidateCitations --> [*] : Pass
-        ValidateCitations --> ExtractMetrics : Retry (Max 3)
-    }
+### 2. Forensic Red Flag Detection
+- Multi-category risk monitoring:
+  - **Liquidity & Solvency** (Declining current ratio, debt maturity cliffs, interest coverage drops).
+  - **Profitability & Margins** (Gross margin compression, divergence between net income and operating cash flow).
+  - **Governance & Legal** (Ongoing litigation, regulatory scrutiny, material weakness in internal controls).
+  - **Operational & Supply Chain** (Customer concentration, supply chain disruptions, inventory build-ups).
+  - **Market & Competitive** (Pricing pressure, market share erosion, FX volatility).
+
+### 3. Conversational Financial Assistant
+- Real-time streaming responses with Time-to-First-Token (TTFT) under 500ms.
+- Clickable citation badges in chat messages linking directly to source document excerpts.
+- Strict refusal logic: if relevant financial data is not present in the ingested filings, the assistant explicitly states the limitation rather than hallucinating numbers.
+
+### 4. Interactive Peer Comparison
+- Select two or more corporate filings to generate immediate side-by-side financial comparison tables.
+- Automatic delta calculation for key performance indicators (KPIs) and growth metrics.
+- AI-synthesized narrative comparing operational strengths and risks between companies.
+
+### 5. Instant PDF Audit Report Generation
+- One-click compilation of workspace analytics into styled, professional PDF reports.
+- Embedded data tables, structured risk assessment summaries, and citation references.
+- In-browser preview and direct binary file download.
+
+---
+
+## 📁 Project Directory Structure
+
+```text
+MAFRS/
+├── .gitignore                         # Comprehensive secret, temp & build exclusion rules
+├── README.md                          # Full system documentation
+├── backend/
+│   ├── .env.example                   # Backend environment configuration template
+│   ├── requirements.txt               # Backend Python dependencies
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── auth.py                    # JWT (HS256), Bcrypt hashing & Firebase RS256 token verification
+│   │   ├── database.py                # MongoDB Atlas connection, indexes & collection accessors
+│   │   ├── main.py                    # FastAPI ASGI application & REST/SSE endpoint routers
+│   │   └── agents/
+│   │       ├── __init__.py
+│   │       ├── comparison_agent.py    # Multi-filing financial comparison engine
+│   │       ├── document_agent.py      # PDF/DOCX parser, chunker & 384-dim embedder
+│   │       ├── extraction_agent.py    # Financial line-item & ratio extraction engine
+│   │       ├── llm_client.py          # Unified LLM client with OpenRouter, Gemini & Groq fallback
+│   │       ├── pipeline.py            # LangGraph multi-agent orchestration pipeline
+│   │       ├── rag.py                 # Hybrid vector + lexical retrieval engine
+│   │       ├── red_flag_agent.py      # 7-stage forensic risk detection engine
+│   │       ├── report_agent.py        # ReportLab PDF compiler & summary generator
+│   │       └── research_agent.py      # Conversational hybrid RAG assistant with SSE streaming
+│   └── scripts/                       # Presentation & operational utility scripts
+├── database/
+│   ├── README.md                      # Database architecture documentation
+│   ├── database_design.md             # Collection schemas & relational mapping
+│   ├── indexes.md                     # MongoDB compound and vector search index definitions
+│   ├── schema.md                      # JSON document schema specifications
+│   └── setup.md                       # Atlas setup and collection bootstrap instructions
+└── frontend/
+    ├── .env.example                   # Frontend environment configuration template
+    ├── package.json                   # Frontend npm dependencies and scripts
+    ├── tsconfig.json                  # TypeScript compiler configuration
+    ├── vite.config.ts                 # Vite bundler configuration
+    ├── public/                        # Static assets and icons
+    └── src/
+        ├── App.tsx                    # React router & global route definitions
+        ├── main.tsx                   # React 18 DOM entrypoint
+        ├── index.css                  # Global styles, Tailwind CSS & custom design tokens
+        ├── components/                # Shared UI components (CitationChip, Sidebar, StatCards, etc.)
+        ├── layouts/                   # DashboardLayout & AuthLayout wrappers
+        ├── pages/                     # Application pages (Dashboard, Chat, Comparison, Upload, Reports, Settings)
+        ├── services/                  # Frontend API service layer (Axios & SSE client)
+        └── store/                     # Context providers (AuthStore, ThemeStore)
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🔌 API Reference
+
+### Authentication & User Management
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/auth/register` | Register a new user account with email, name, and password. | No |
+| `POST` | `/auth/login` | Authenticate with credentials and receive a signed HS256 JWT access token. | No |
+| `POST` | `/auth/firebase` | Authenticate using a Google Firebase OAuth ID token. | No |
+| `GET` | `/auth/me` | Fetch profile information and assigned workspace for the current user. | Yes (Bearer) |
+
+### Workspaces
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/workspaces` | List all workspaces accessible by the authenticated user. | Yes (Bearer) |
+| `POST` | `/workspaces` | Create a new isolated financial analysis workspace. | Yes (Bearer) |
+| `GET` | `/workspaces/{workspace_id}` | Retrieve details and document manifests for a specific workspace. | Yes (Bearer) |
+| `DELETE` | `/workspaces/{workspace_id}` | Delete a workspace and its associated documents, metrics, and reports. | Yes (Bearer) |
+
+### Document Ingestion & Extractions
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/documents/upload` | Upload a financial document (PDF/DOCX/TXT) and trigger autonomous ingestion. | Yes (Bearer) |
+| `GET` | `/documents` | List all indexed documents in the active workspace. | Yes (Bearer) |
+| `GET` | `/documents/{document_id}/extraction` | Get extracted financial metrics and balance sheet items for a document. | Yes (Bearer) |
+| `GET` | `/documents/{document_id}/red_flags` | Retrieve detected forensic red flags and risk classifications. | Yes (Bearer) |
+| `DELETE` | `/documents/{document_id}` | Remove a document, vector chunks, metrics, and red flags from the database. | Yes (Bearer) |
+
+### Conversational Research Assistant
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/research/query` | Submit a financial query and receive a grounded JSON response with citations. | Yes (Bearer) |
+| `POST` | `/research/stream` | Stream research answers in real time using Server-Sent Events (SSE). | Yes (Bearer) |
+| `GET` | `/research/history` | Retrieve past conversational turns and research threads for the workspace. | Yes (Bearer) |
+
+### Comparison Engine
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/comparisons` | Trigger multi-document / peer comparison analysis across selected filings. | Yes (Bearer) |
+| `GET` | `/comparisons` | List all persisted comparison reports for the workspace. | Yes (Bearer) |
+| `GET` | `/comparisons/{comparison_id}` | Retrieve full details and matrix data for a specific comparison run. | Yes (Bearer) |
+
+### Executive Reports
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/reports/generate` | Compile extraction metrics, red flags, and commentary into an audit report. | Yes (Bearer) |
+| `GET` | `/reports` | List all generated research reports in the workspace. | Yes (Bearer) |
+| `GET` | `/reports/{report_id}/status` | Check compilation status of a generated report. | Yes (Bearer) |
+| `GET` | `/reports/{report_id}/pdf` | Stream binary PDF content directly to browser viewer. | Yes (Bearer / Query) |
+| `GET` | `/reports/{report_id}/download` | Download compiled PDF report file. | Yes (Bearer / Query) |
+
+### System Health
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | Verify database connectivity and server status. | No |
+| `GET` | `/` | Root status and API metadata. | No |
+
+---
+
+## 🔒 Security & Grounding Architecture
+
+### 1. Multi-Tenant Workspace Isolation
+Every database query strictly enforces workspace boundary checks. Documents, vector chunks, extraction metrics, red flags, conversations, and reports are partitioned by `workspace_id`. Cross-workspace data leakage is blocked at the authentication and database service layers.
+
+### 2. Dual Authentication Gateway
+- **Native JWTs**: Securely signed with HS256, strictly validated expiration timestamps, and password hashing powered by Bcrypt with automatic salt generation.
+- **Firebase OAuth Integration**: RS256 token decoding against Google's public x509 certificate authority for secure single sign-on.
+
+### 3. Strict Source Grounding & Anti-Hallucination
+- All metrics and red flags are linked to verified text snippets and page numbers.
+- Research assistant queries execute hybrid vector retrieval; if the similarity score is below the minimum threshold or if evidence is absent, the agent refuses to speculate.
+
+### 4. Zero Credential Exposure
+- Internal chain-of-thought tokens and system prompt templates are filtered out before sending responses to the client.
+- All secrets, API keys, and database URIs are managed through environment variables and strictly excluded via `.gitignore`.
+
+---
+
+## 🚀 Getting Started & Installation
 
 ### Prerequisites
-
-- **Python 3.10+** (Backend API & Workers)
-- **Node.js 18+** (Frontend React App)
-- **MongoDB** (State and Vector Database)
-- **Redis** (Optional: for Celery async queue management)
-- API Keys for your preferred LLM provider (OpenAI / Anthropic)
+- **Python 3.10+** (64-bit)
+- **Node.js 18+** & **npm**
+- **MongoDB Atlas** cluster (with Vector Search index configured)
+- An **OpenRouter**, **Google Gemini**, or **Groq** API key
 
 ---
 
-## 🔗 Links
+### 1. Backend Setup
 
-[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/samratmaurya1217/multi-agent-financial-research-system)
+1. **Navigate to backend directory**:
+   ```bash
+   cd backend
+   ```
+
+2. **Create and activate a virtual environment**:
+   ```bash
+   # On Windows (PowerShell)
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+
+   # On Linux / macOS
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   ```
+   *Edit `backend/.env` with your MongoDB URI, JWT secret, and LLM API keys.*
+
+5. **Start the FastAPI backend server**:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+   The backend API will be available at `http://localhost:8000` (Interactive API docs at `http://localhost:8000/docs`).
 
 ---
 
-*Built with ❤️ to revolutionize autonomous financial intelligence.*
+### 2. Frontend Setup
+
+1. **Navigate to frontend directory**:
+   ```bash
+   cd frontend
+   ```
+
+2. **Install Node dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   ```
+   *Verify `VITE_API_URL=http://localhost:8000` inside `frontend/.env`.*
+
+4. **Start the Vite development server**:
+   ```bash
+   npm run dev
+   ```
+   The frontend application will be available at `http://localhost:5173`.
+
+---
+
+### 3. MongoDB Atlas Configuration
+
+1. In MongoDB Atlas, create a database named `velsora`.
+2. Collections are automatically initialized on startup with required indexes:
+   - `users`, `workspaces`, `documents`, `document_chunks`, `extracted_metrics`, `red_flags`, `conversations`, `comparisons`, `reports`, `jobs`, `audit_logs`.
+3. To enable hybrid RAG vector search, configure a Vector Index on the `document_chunks` collection:
+   ```json
+   {
+     "fields": [
+       {
+         "type": "vector",
+         "path": "embedding",
+         "numDimensions": 384,
+         "similarity": "cosine"
+       },
+       {
+         "type": "filter",
+         "path": "workspace_id"
+       },
+       {
+         "type": "filter",
+         "path": "document_id"
+       }
+     ]
+   }
+   ```
+
+---
+
+## ⚙️ Environment Configuration Reference
+
+### Backend (`backend/.env`)
+
+| Variable | Required | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `MONGO_URI` | **Yes** | MongoDB Atlas connection string | `mongodb+srv://user:pass@cluster.mongodb.net/?appName=velsora` |
+| `MONGO_DB_NAME` | No | Database name | `velsora` (default) |
+| `JWT_SECRET` | **Yes** | 256-bit secret key for signing JWTs | `a_strong_random_secret_string` |
+| `JWT_EXPIRE_HOURS` | No | JWT access token validity in hours | `72` (default) |
+| `OPENROUTER_API_KEY` | Optional | OpenRouter API Key (for NVIDIA Nemotron) | `sk-or-v1-...` |
+| `OPENROUTER_MODEL` | No | Model slug on OpenRouter | `nvidia/nemotron-3-ultra-550b-a55b` |
+| `GEMINI_API_KEY` | Optional | Google Gemini API Key (Fallback 1) | `AIzaSy...` |
+| `GROQ_API_KEY` | Optional | Groq API Key (Fallback 2) | `gsk_...` |
+| `FIREBASE_PROJECT_ID` | Optional | Firebase Project ID for token validation | `velsora-29767` |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Required | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `VITE_API_URL` | **Yes** | Backend FastAPI server endpoint | `http://localhost:8000` |
+| `VITE_FIREBASE_API_KEY` | Optional | Firebase Web Client API key | `AIzaSy...` |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Optional | Firebase Auth Domain | `project.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | Optional | Firebase Project ID | `project-id` |
+| `VITE_FIREBASE_STORAGE_BUCKET`| Optional | Firebase Storage Bucket | `project.appspot.com` |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Optional | Firebase Messaging Sender ID | `1234567890` |
+| `VITE_FIREBASE_APP_ID` | Optional | Firebase Web App ID | `1:123:web:abc` |
+
+---
+
+## 👥 Authors & Acknowledgments
+
+- **Samrat Maurya** ([@samratmaurya1217](https://github.com/samratmaurya1217))
+- **Team 2** — Infosys Springboard Virtual Internship 7.0
+
+---
+
+*Built for robust, verifiable, and explainable autonomous financial intelligence.*

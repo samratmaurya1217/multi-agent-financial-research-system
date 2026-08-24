@@ -1,6 +1,6 @@
 """
 auth.py — Production Authentication & User Identity Management.
-Supports Native HS256 JWTs, Secure Password Hashing, Google Firebase ID Tokens,
+Supports Native HS256 JWTs, Secure Bcrypt Password Hashing, Google Firebase ID Tokens,
 and Strict Workspace Isolation in MongoDB Atlas.
 """
 
@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=_env_path, override=False)
 
+import bcrypt
 import jwt
 import requests
 from fastapi import Depends, HTTPException, status, Header
@@ -27,7 +28,8 @@ logger = logging.getLogger("velsora.auth")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "velsora_dev_jwt_secret_change_in_production_998877")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_SECONDS = 72 * 3600  # 72 hours
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "72"))
+JWT_EXPIRE_SECONDS = JWT_EXPIRE_HOURS * 3600
 
 GOOGLE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "velsora-29767")
@@ -41,23 +43,48 @@ _keys_expiry: float = 0.0
 # ─── Password & Token Helpers ────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256 with project salt."""
-    salt = "velsora_fintech_secure_salt"
-    return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+    """Hash password securely using bcrypt with automatic salt."""
+    if not password:
+        return ""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify plain password against hashed password."""
-    return hash_password(plain_password) == hashed_password
+    """
+    Verify plain password against hashed password.
+    Supports standard bcrypt hashes as well as legacy SHA-256 hashes.
+    """
+    if not plain_password or not hashed_password:
+        return False
+
+    # Check for bcrypt hash prefix
+    if hashed_password.startswith("$2b$") or hashed_password.startswith("$2a$") or hashed_password.startswith("$2y$"):
+        try:
+            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+        except Exception as e:
+            logger.warning(f"Bcrypt verification failed: {e}")
+            return False
+
+    # Backward-compatible check for legacy SHA-256 with project salt
+    salt = "velsora_fintech_secure_salt"
+    legacy_hash = hashlib.sha256(f"{salt}:{plain_password}".encode("utf-8")).hexdigest()
+    return legacy_hash == hashed_password
 
 
-def create_jwt_token(data: Dict[str, Any]) -> str:
-    """Create a signed HS256 JWT access token."""
+def create_jwt_token(data: Dict[str, Any], expires_hours: Optional[int] = None) -> str:
+    """Create a signed HS256 JWT access token with standard exp/iat/iss claims."""
     to_encode = data.copy()
     now = int(time.time())
+    expire_seconds = (expires_hours * 3600) if expires_hours else JWT_EXPIRE_SECONDS
+    
+    # Never place password hashes or raw secrets inside JWT payload
+    to_encode.pop("password", None)
+    to_encode.pop("_id", None)
+
     to_encode.update({
         "iat": now,
-        "exp": now + JWT_EXPIRE_SECONDS,
+        "exp": now + expire_seconds,
         "iss": "velsora.ai",
     })
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -122,28 +149,19 @@ def verify_token(
 ) -> Dict[str, Any]:
     """
     Unified Token Verification:
-    1. Native HS256 JWT Token
-    2. Google Firebase RS256 Token
-    3. Dev token fallback in non-production
+    Strictly enforces valid HS256 JWT or RS256 Firebase token.
+    Rejects missing, expired, tampered, or invalid tokens with HTTP 401.
     """
     raw_token = None
-    if token:
-        raw_token = token
-    elif authorization and authorization.startswith("Bearer "):
-        raw_token = authorization.split("Bearer ")[1].strip()
-    elif authorization:
-        raw_token = authorization.strip()
+    if isinstance(token, str) and token.strip():
+        raw_token = token.strip()
+    elif isinstance(authorization, str) and authorization.strip():
+        if authorization.startswith("Bearer "):
+            raw_token = authorization.split("Bearer ")[1].strip()
+        else:
+            raw_token = authorization.strip()
 
     if not raw_token:
-        # Default analyst user for unauthenticated requests in development
-        if os.getenv("ENVIRONMENT") != "production":
-            return {
-                "uid": "usr_analyst",
-                "sub": "usr_analyst",
-                "email": "analyst@velsora.ai",
-                "name": "Analyst",
-                "provider_id": "password",
-            }
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authentication token. Please log in.",
@@ -152,10 +170,27 @@ def verify_token(
 
     # 1. Try Native HS256 JWT decode
     try:
-        decoded = jwt.decode(raw_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        decoded = jwt.decode(
+            raw_token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            options={"verify_exp": True, "verify_signature": True}
+        )
         decoded["uid"] = decoded.get("uid") or decoded.get("user_id") or decoded.get("sub", "")
+        if not decoded["uid"]:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token claims: missing user identifier.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return decoded
-    except Exception as e:
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token has expired. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except (jwt.InvalidTokenError, jwt.DecodeError) as e:
         logger.debug(f"Native HS256 JWT decode failed: {e}")
 
     # 2. Try Firebase RS256 Token decode
@@ -163,20 +198,6 @@ def verify_token(
         return _verify_firebase_token(raw_token)
     except Exception as e:
         logger.debug(f"Firebase RS256 token decode failed: {e}")
-
-    # 3. Explicit dev token fallback ONLY (must start with dev_token_ or be 'analyst')
-    if os.getenv("ENVIRONMENT") != "production" and (raw_token.startswith("dev_token_") or raw_token in ["analyst", "dev"]):
-        clean_token = raw_token.replace("dev_token_", "").replace("Bearer ", "").strip() or "analyst"
-        email = clean_token if "@" in clean_token else f"{clean_token}@velsora.ai"
-        name = clean_token.split("@")[0].capitalize()
-        uid = f"usr_{clean_token.split('@')[0]}"
-        return {
-            "uid": uid,
-            "sub": uid,
-            "email": email,
-            "name": name,
-            "provider_id": "password",
-        }
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -202,7 +223,6 @@ def get_current_user(claims: Dict[str, Any] = Depends(verify_token)) -> Dict[str
     user_doc = users_col().find_one({"$or": query_conditions})
     
     if not user_doc:
-        # Create fresh user and workspace
         clean_suffix = uid.replace("usr_", "").replace("@", "_").replace(".", "_")[:12]
         workspace_id = claims.get("workspaceId") or f"ws_{clean_suffix}"
         user_id = f"usr_{clean_suffix}"
@@ -254,24 +274,43 @@ def get_current_user(claims: Dict[str, Any] = Depends(verify_token)) -> Dict[str
                     "updated_at": now,
                 })
 
+    # Sanitize password out of returned user object
+    user_doc.pop("password", None)
     return user_doc
 
 
 # ─── Strict Workspace Isolation Helper ───────────────────────────────────────
 
 def get_user_workspace(user: Dict[str, Any] = Depends(get_current_user), workspace_id: Optional[str] = None) -> str:
-    """Return user's verified isolated workspace ID."""
-    allowed_ws = user.get("workspaceId") or f"ws_{user.get('user_id', 'analyst')[:8]}"
-    email = user.get("email", "").lower().strip()
-    if workspace_id and workspace_id != "ws_default":
-        ws_doc = workspaces_col().find_one({"workspace_id": workspace_id})
-        if ws_doc:
-            # Check workspace authorization: user owns the workspace
-            if ws_doc.get("user_id") == user.get("user_id") or ws_doc.get("workspace_id") == allowed_ws:
-                return workspace_id
-            # Seed workspaces are specifically authorized for s.sam.11221177@gmail.com
-            if email == "s.sam.11221177@gmail.com" and workspace_id in [
-                "ws_apple2024", "ws_tsla_ford", "ws_msft2023", "ws_amzn_risk", "ws_O3RqiuXv"
-            ]:
-                return workspace_id
-    return allowed_ws
+    """
+    Return user's verified isolated workspace ID.
+    If workspace_id is provided, strictly enforces ownership in MongoDB Atlas.
+    Raises 403 Forbidden if the authenticated user is not authorized for the workspace.
+    """
+    user_id = user.get("user_id")
+    allowed_ws = user.get("workspaceId") or f"ws_{user_id.replace('usr_', '')[:12]}"
+
+    if not workspace_id or workspace_id in ["ws_default", "default", ""]:
+        return allowed_ws
+
+    ws_doc = workspaces_col().find_one({"workspace_id": workspace_id})
+    if not ws_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workspace '{workspace_id}' not found."
+        )
+
+    # Verify authorization: user owns the workspace or it matches their assigned default
+    if ws_doc.get("user_id") == user_id or ws_doc.get("workspace_id") == allowed_ws:
+        return workspace_id
+
+    # Check multi-tenant membership if workspace has a members list
+    members = ws_doc.get("members", [])
+    if user_id in members or user.get("email") in members:
+        return workspace_id
+
+    logger.warning(f"Unauthorized workspace access blocked: user '{user_id}' requested workspace '{workspace_id}' owned by '{ws_doc.get('user_id')}'")
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Access forbidden: you do not have permission to access workspace '{workspace_id}'."
+    )

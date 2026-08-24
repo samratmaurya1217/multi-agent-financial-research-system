@@ -5,6 +5,14 @@
 **/.env.local
 .env.*.local
 **/.env.*.local
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.bak
+*.orig
 
 # Allow template examples
 !.env.example

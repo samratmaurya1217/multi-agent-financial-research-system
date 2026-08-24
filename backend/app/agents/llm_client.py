@@ -25,6 +25,11 @@ import hashlib
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
+from pathlib import Path
+from dotenv import load_dotenv
+
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=_env_path, override=False)
 
 import httpx
 
@@ -100,16 +105,17 @@ class OpenRouterNemotronProvider:
     DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 
     def __init__(self):
-        self.api_key = os.getenv("OPENROUTER_API_KEY", "").strip() or os.getenv("NVIDIA_API_KEY", "").strip()
+        self.api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
         self.base_url = os.getenv("OPENROUTER_BASE_URL", self.DEFAULT_BASE_URL).rstrip("/")
         self.model = os.getenv("OPENROUTER_MODEL", self.DEFAULT_MODEL).strip()
+        self.is_credit_exhausted = False
 
     def is_available(self) -> bool:
-        return bool(self.api_key) and not self.api_key.startswith("nvapi-nemotron-key-placeholder")
+        return bool(self.api_key) and not self.is_credit_exhausted
 
     def complete(self, prompt: str, config: LLMConfig) -> LLMResponse:
         if not self.is_available():
-            raise RuntimeError("OPENROUTER_API_KEY is not configured.")
+            raise RuntimeError("OPENROUTER_API_KEY is not configured or credits exhausted.")
 
         url = f"{self.base_url}/chat/completions"
         headers = {
@@ -193,6 +199,9 @@ class OpenRouterNemotronProvider:
             status_code = e.response.status_code
             error_body = e.response.text[:200]
             logger.warning(f"[LLMClient:OpenRouter] Model '{self.model}' HTTP {status_code}: {error_body}")
+            if status_code == 402 or "Insufficient credits" in error_body:
+                self.is_credit_exhausted = True
+                logger.warning("[LLMClient:OpenRouter] Account credits exhausted (402). Disabling OpenRouter for session.")
             if status_code in [401, 403]:
                 raise RuntimeError(f"OpenRouter API Key invalid/unauthorized (HTTP {status_code}): {error_body}") from e
             raise RuntimeError(f"OpenRouter HTTP {status_code}: {error_body}") from e
@@ -217,20 +226,20 @@ class GeminiProvider:
     """
     DEFAULT_MODELS = [
         "gemini-flash-latest",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-pro",
+        "gemini-flash-lite-latest",
+        "gemini-pro-latest",
     ]
 
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        self.rate_limited_until = 0.0
 
     def is_available(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) and (time.time() > self.rate_limited_until)
 
     def complete(self, prompt: str, config: LLMConfig) -> LLMResponse:
         if not self.is_available():
-            raise RuntimeError("GEMINI_API_KEY is not configured.")
+            raise RuntimeError("GEMINI_API_KEY is not configured or currently rate limited.")
 
         last_error = None
         start_time = time.time()
@@ -251,6 +260,9 @@ class GeminiProvider:
                 logger.info(f"[LLMClient:Gemini] Invoking fallback model '{model}'...")
                 with httpx.Client(timeout=config.timeout_seconds) as client:
                     resp = client.post(url, json=payload)
+                    if resp.status_code == 429:
+                        self.rate_limited_until = time.time() + 20.0
+                        logger.warning("[LLMClient:Gemini] Rate limit 429 hit. Enabling 20s circuit breaker.")
                     resp.raise_for_status()
                     data = resp.json()
 
@@ -261,6 +273,8 @@ class GeminiProvider:
                 parts = candidates[0].get("content", {}).get("parts", [])
                 raw_content = "".join([p.get("text", "") for p in parts])
                 clean_content = sanitize_llm_output(raw_content)
+                if not clean_content:
+                    raise RuntimeError("Gemini returned empty content.")
 
                 elapsed = round(time.time() - start_time, 2)
                 usage = data.get("usageMetadata", {})
@@ -299,8 +313,8 @@ class GroqProvider:
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "qwen/qwen3.6-27b",
-        "llama-3.3-70b-versatile",
         "groq/compound-mini",
+        "groq/compound",
     ]
 
     def __init__(self):
@@ -425,12 +439,16 @@ class MultiProviderLLMClient:
                     return response
 
                 except Exception as e:
+                    err_str = str(e)
                     logger.warning(
                         f"[MultiProviderLLMClient] {provider_name} attempt {attempt}/2 failed due to infrastructure error: {e}"
                     )
+                    if "401" in err_str or "402" in err_str or "403" in err_str or "Insufficient credits" in err_str or "unauthorized" in err_str.lower():
+                        infra_errors.append(f"{provider_name}: {err_str}")
+                        break
                     time.sleep(0.5 * attempt)
                     if attempt == 2:
-                        infra_errors.append(f"{provider_name}: {str(e)}")
+                        infra_errors.append(f"{provider_name}: {err_str}")
 
         # If all available providers failed
         error_summary = "; ".join(infra_errors) if infra_errors else "No LLM provider credentials configured."
