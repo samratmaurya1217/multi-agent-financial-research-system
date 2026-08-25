@@ -418,9 +418,9 @@ class MultiProviderLLMClient:
             return self._cache[cache_key]
 
         providers = [
+            ("Groq (High-Speed Inference)", self.groq_provider),
             ("OpenRouter Nemotron 3 Ultra (Primary)", self.openrouter_provider),
-            ("Google Gemini (Fallback 1)", self.gemini_provider),
-            ("Groq (Fallback 2)", self.groq_provider),
+            ("Google Gemini (Fallback)", self.gemini_provider),
         ]
 
         infra_errors = []
