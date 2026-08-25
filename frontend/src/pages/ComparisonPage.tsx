@@ -229,7 +229,7 @@ export function ComparisonPage() {
           <div>
             <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-wider mb-2">
               <GitCompare className="h-4 w-4" />
-              <span>Multi-Agent Comparison Agent (SAD 7.4)</span>
+              <span>Cross-Company Intelligence</span>
             </div>
             <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
               Company Comparison
@@ -590,7 +590,7 @@ export function ComparisonPage() {
                     <div>
                       <div className="flex items-center gap-2 text-blue-400 text-xs font-extrabold uppercase tracking-wider mb-2">
                         <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                        <span>SAD 7.4 Multi-Agent Comparative Synthesis</span>
+                        <span>Comparative Intelligence Synthesis</span>
                       </div>
                       <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
                         {comparedDocs.map((d) => getDocDisplayName(d.filename)).join(" vs ")}

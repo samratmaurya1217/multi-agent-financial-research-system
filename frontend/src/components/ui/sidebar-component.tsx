@@ -150,26 +150,35 @@ export function TwoLevelSidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col h-[calc(100vh-24px)] flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden m-3 mr-0 rounded-3xl shadow-[20px_0_40px_-15px_rgba(0,0,0,0.3)] z-20",
+        "flex flex-col h-[calc(100vh-24px)] flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden m-3 mr-0 rounded-3xl z-20 bg-black shadow-2xl",
         collapsed ? "w-[76px]" : "w-[260px]"
       )}
-      style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(30px)', border: '1px solid rgba(255,255,255,0.1)' }}
+      style={{ background: '#09090b', border: '1px solid rgba(255,255,255,0.1)' }}
     >
       {/* Header */}
       <div className={cn("h-20 flex items-center flex-shrink-0 px-4", collapsed ? "justify-center" : "gap-2 justify-between")}>
         <Logo collapsed={collapsed} />
-        {!collapsed && (
+        {!collapsed ? (
           <button
             onClick={() => setCollapsed(true)}
+            title="Collapse sidebar"
             className="h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all flex-shrink-0"
           >
             <ChevronRight className="w-4 h-4 rotate-180" />
           </button>
+        ) : (
+          <button
+            onClick={() => setCollapsed(false)}
+            title="Expand sidebar"
+            className="h-6 w-6 mt-2 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
 
-      {/* Nav items */}
-      <nav className={cn("flex-1 overflow-y-auto py-2 flex flex-col gap-1", collapsed ? "px-2 items-center" : "px-3")}>
+      {/* Nav items (with scrollbar hidden) */}
+      <nav className={cn("flex-1 overflow-y-auto py-2 flex flex-col gap-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden", collapsed ? "px-2 items-center" : "px-3")}>
         
         {NAV_ITEMS.map((item) => (
           <NavItemButton
@@ -180,7 +189,7 @@ export function TwoLevelSidebar() {
           />
         ))}
 
-        <div className={cn("my-3 border-t border-white/5", collapsed ? "w-8" : "mx-2")} />
+        <div className={cn("my-3 border-t border-white/10", collapsed ? "w-8" : "mx-2")} />
         
         {BOTTOM_ITEMS.map((item) => (
           <NavItemButton
@@ -192,14 +201,12 @@ export function TwoLevelSidebar() {
         ))}
       </nav>
 
-
-
       {/* Footer user card */}
       {!collapsed && (
-        <div className="flex-shrink-0 p-4 border-t border-white/5">
-          <div className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/[0.04] transition-all cursor-pointer group">
+        <div className="flex-shrink-0 p-4 border-t border-white/10">
+          <div className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/[0.06] transition-all cursor-pointer group">
             <Avatar size={8} />
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0" onClick={() => navigate("/profile")}>
               <p className="text-sm font-semibold text-white truncate leading-tight">{user?.name || "Analyst"}</p>
               <p className="text-[11px] text-white/40 truncate font-medium">{user?.email?.split("@")[0] || "velsora.ai"}</p>
             </div>
@@ -207,7 +214,7 @@ export function TwoLevelSidebar() {
               onClick={handleLogout}
               aria-label="Logout"
               title="Logout"
-              className="h-8 w-8 rounded-xl flex items-center justify-center text-white/20 hover:text-rose-400 hover:bg-rose-400/10 transition-all flex-shrink-0 opacity-0 group-hover:opacity-100"
+              className="h-8 w-8 rounded-xl flex items-center justify-center text-white/40 hover:text-rose-400 hover:bg-rose-400/10 transition-all flex-shrink-0 opacity-0 group-hover:opacity-100"
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -215,17 +222,19 @@ export function TwoLevelSidebar() {
         </div>
       )}
 
-      {/* Notification button (collapsed-only) */}
+      {/* Collapsed footer */}
       {collapsed && (
         <div className="px-2 pb-4 flex flex-col items-center gap-2">
           <button
-            className="h-10 w-10 rounded-2xl flex items-center justify-center text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all"
+            className="h-10 w-10 rounded-2xl flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-all"
             title="Logout"
             onClick={handleLogout}
           >
             <LogOut className="h-4 w-4" />
           </button>
-          <Avatar size={10} />
+          <div onClick={() => navigate("/profile")} className="cursor-pointer">
+            <Avatar size={10} />
+          </div>
         </div>
       )}
     </aside>

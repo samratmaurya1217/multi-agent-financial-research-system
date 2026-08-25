@@ -4,7 +4,6 @@ import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { useAuth } from "@/store/authStore";
 import { User, Shield, BarChart2, Edit3, FolderOpen, FileText, MessageSquare } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
-import { Badge } from "@/components/ui/Badge";
 import { getWorkspaces, type Workspace } from "@/services/workspace";
 import { getReports, type Report } from "@/services/reports";
 
@@ -72,7 +71,6 @@ export function ProfilePage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-1">
                 <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{user?.name || "Analyst"}</h2>
-                <Badge variant="info">{user?.role ? `${user.role} Plan` : "Analyst Plan"}</Badge>
               </div>
               <p className="text-slate-500 font-medium text-sm mb-3">{user?.email || "analyst@velsora.ai"}</p>
               <div className="flex items-center gap-3">
@@ -92,7 +90,7 @@ export function ProfilePage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           <StatCard
             title="Workspaces"
@@ -122,47 +120,6 @@ export function ProfilePage() {
             iconColor="text-orange-600"
             iconBg="bg-orange-50"
           />
-        </motion.div>
-
-        {/* Plan info */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="p-8 rounded-3xl border border-blue-200 bg-gradient-to-b from-blue-50 to-white shadow-sm"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-slate-800 font-bold text-lg mb-1">
-                {user?.role ? `${user.role} Plan` : "Analyst Plan"}
-              </h3>
-              <p className="text-slate-500 font-medium text-sm">
-                Unlimited workspaces · 100 documents/month · Multi-agent extraction enabled
-              </p>
-            </div>
-            <button className="px-5 py-2.5 rounded-full bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20">
-              Manage Plan
-            </button>
-          </div>
-          <div className="mt-6 space-y-4">
-            {[
-              { label: "Active Documents Ingested", used: stats.documents, total: 100 },
-              { label: "Research Queries & Reports", used: stats.sessions + stats.reports, total: 500 },
-            ].map((bar) => (
-              <div key={bar.label}>
-                <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-2">
-                  <span>{bar.label}</span>
-                  <span>{bar.used} / {bar.total}</span>
-                </div>
-                <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, Math.max(5, (bar.used / bar.total) * 100))}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
         </motion.div>
       </div>
     </DashboardLayout>

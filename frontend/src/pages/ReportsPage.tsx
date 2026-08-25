@@ -213,7 +213,7 @@ export function ReportsPage() {
           <div>
             <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-wider mb-1.5">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Milestone 4 • Final Report Agent</span>
+              <span>Automated Diligence Generation</span>
             </div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
               Institutional Diligence Reports
