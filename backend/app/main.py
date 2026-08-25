@@ -65,10 +65,11 @@ allowed_origins = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "https://velsora-xfkq.onrender.com",
 ]
 if cors_origins_env:
     for o in cors_origins_env.split(","):
-        if o.strip():
+        if o.strip() and o.strip() not in allowed_origins:
             allowed_origins.append(o.strip())
 
 app.add_middleware(
@@ -76,9 +77,34 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_cors_headers_always(request, call_next):
+    origin = request.headers.get("origin")
+    if request.method == "OPTIONS":
+        from fastapi.responses import Response
+        response = Response(status_code=200)
+    else:
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.error(f"Unhandled exception in request: {exc}", exc_info=True)
+            from fastapi.responses import JSONResponse
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "An internal server error occurred. Please try again."}
+            )
+    if origin and ("onrender.com" in origin or "vercel.app" in origin or "localhost" in origin or "127.0.0.1" in origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+    return response
 
 # ─── Startup ─────────────────────────────────────────────────────────────────
 @app.on_event("startup")
@@ -564,6 +590,36 @@ def get_documents(workspace_id: Optional[str] = Query(None), user: dict = Depend
     docs = list(documents_col().find({"workspace_id": ws_id}))
     return [_strip_mongo(d) for d in docs]
 
+def _run_document_pipeline_background(doc_id: str, ws_id: str):
+    from app.database import get_db
+    try:
+        from app.agents.extraction_agent import run_extraction_agent
+        run_extraction_agent(doc_id, ws_id)
+    except Exception as e:
+        logger.error(f"[Pipeline] Extraction agent failed for {doc_id}: {e}")
+        get_db()["extracted_metrics"].update_one(
+            {"document_id": doc_id},
+            {"$set": {"extraction_status": "failed", "error": str(e)}},
+            upsert=True
+        )
+
+    try:
+        from app.agents.red_flag_agent import run_red_flag_agent
+        run_red_flag_agent(doc_id, ws_id)
+    except Exception as e:
+        logger.error(f"[Pipeline] Red flag agent failed for {doc_id}: {e}")
+        get_db()["red_flags"].update_one(
+            {"document_id": doc_id},
+            {"$set": {"status": "failed", "error": str(e)}},
+            upsert=True
+        )
+
+    # Mark document as ready once background agents complete
+    documents_col().update_one(
+        {"document_id": doc_id},
+        {"$set": {"status": "ready", "updated_at": _now()}}
+    )
+
 @app.post("/documents")
 @app.post("/upload")
 async def upload_document_sad(
@@ -595,7 +651,37 @@ async def upload_document_sad(
         f.write(content)
 
     doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+    now = _now()
     
+    # Initialize placeholder records in MongoDB with 'processing' status
+    from app.database import get_db
+    get_db()["extracted_metrics"].update_one(
+        {"document_id": doc_id},
+        {"$set": {
+            "document_id": doc_id,
+            "workspace_id": ws_id,
+            "metrics": [],
+            "metrics_count": 0,
+            "extraction_status": "processing",
+            "created_at": now,
+            "updated_at": now
+        }},
+        upsert=True
+    )
+    get_db()["red_flags"].update_one(
+        {"document_id": doc_id},
+        {"$set": {
+            "document_id": doc_id,
+            "workspace_id": ws_id,
+            "red_flags": [],
+            "flags_count": 0,
+            "status": "processing",
+            "created_at": now,
+            "updated_at": now
+        }},
+        upsert=True
+    )
+
     # Trigger LangGraph ingestion + MongoDB Atlas Vector Search indexing pipeline
     indexing_res = {"total_pages": 1, "chunk_count": 0}
     try:
@@ -604,19 +690,15 @@ async def upload_document_sad(
         logger.error(f"Document indexing warning: {e}")
 
     # Trigger Extraction Agent & Red Flag Agent in background
-    from app.agents.extraction_agent import run_extraction_agent
-    from app.agents.red_flag_agent import run_red_flag_agent
-    background_tasks.add_task(run_extraction_agent, doc_id, ws_id)
-    background_tasks.add_task(run_red_flag_agent, doc_id, ws_id)
+    background_tasks.add_task(_run_document_pipeline_background, doc_id, ws_id)
 
-    now = _now()
     doc_meta = {
         "document_id": doc_id,
         "workspace_id": ws_id,
         "filename": file.filename,
         "file_type": ext,
         "storage_path": file_path,
-        "status": "ready",
+        "status": "processing",
         "total_pages": indexing_res.get("total_pages", 1),
         "total_chunks": indexing_res.get("chunk_count", 0),
         "size_kb": round(len(content) / 1024),
@@ -642,8 +724,10 @@ def get_document_red_flags(document_id: str, user: dict = Depends(get_current_us
     
     return {
         "document_id": document_id,
+        "workspace_id": doc.get("workspace_id"),
         "red_flags": [],
-        "status": "ready"
+        "flags_count": 0,
+        "status": "processing" if doc.get("status") == "processing" else "complete"
     }
 
 @app.get("/documents/{document_id}/extraction")
@@ -654,12 +738,15 @@ def get_document_extraction(document_id: str, user: dict = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Document not found.")
     get_user_workspace(user, doc.get("workspace_id"))
     metrics_doc = get_db()["extracted_metrics"].find_one({"document_id": document_id})
-    metrics = metrics_doc.get("metrics", []) if metrics_doc else []
+    if metrics_doc:
+        return _strip_mongo(metrics_doc)
         
     return {
         "document_id": document_id,
-        "metrics": metrics,
-        "extraction_status": metrics_doc.get("extraction_status", "ready") if metrics_doc else "ready"
+        "workspace_id": doc.get("workspace_id"),
+        "metrics": [],
+        "metrics_count": 0,
+        "extraction_status": "processing" if doc.get("status") == "processing" else "complete"
     }
 
 @app.delete("/documents/{document_id}")
