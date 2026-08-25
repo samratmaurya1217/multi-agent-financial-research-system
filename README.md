@@ -8,6 +8,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4+-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Vite](https://img.shields.io/badge/Vite-6.0+-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Deploy: Render](https://img.shields.io/badge/Deploy-Render%20Live-46E3B7?logo=render&logoColor=white)](https://velsora-xtkq.onrender.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Velsora** is an autonomous multi-agent financial intelligence and research platform engineered to ingest, parse, extract, evaluate, compare, and generate analyst-grade insights from corporate financial filings (10-K, 10-Q, 8-K, Annual Reports, and Earnings Transcripts). 
@@ -18,6 +19,7 @@ By combining **LangGraph-driven multi-agent orchestration**, **MongoDB Atlas Vec
 
 ## 📑 Table of Contents
 
+- [🌐 Live Deployment Links](#-live-deployment--links)
 - [Core Value Proposition](#-core-value-proposition)
 - [System Architecture](#-system-architecture)
 - [Multi-Agent Intelligence Network](#-multi-agent-intelligence-network)
@@ -31,6 +33,7 @@ By combining **LangGraph-driven multi-agent orchestration**, **MongoDB Atlas Vec
   - [Frontend Setup](#2-frontend-setup)
   - [Database & Vector Index Setup](#3-mongodb-atlas-configuration)
 - [Environment Configuration Reference](#-environment-configuration-reference)
+- [Live Deployment Links](#-live-deployment--links)
 
 ---
 
@@ -458,6 +461,18 @@ Every database query strictly enforces workspace boundary checks. Documents, vec
 
 ---
 
+## 🌐 Live Deployment & Links
+
+The system is deployed and fully operational on Render:
+
+| Service | Platform | Live URL |
+| :--- | :--- | :--- |
+| **Frontend Application** | Render Static Site | [https://velsora-xtkq.onrender.com](https://velsora-xtkq.onrender.com) |
+| **Backend API / Swagger UI** | Render Web Service | [https://velsora-46yh.onrender.com/docs](https://velsora-46yh.onrender.com/docs) |
+| **API Health Status** | Render Web Service | [https://velsora-46yh.onrender.com/](https://velsora-46yh.onrender.com/) |
+
+---
+
 ## 👥 Authors & Acknowledgments
 
 - **Samrat Maurya** ([@samratmaurya1217](https://github.com/samratmaurya1217))
@@ -478,3 +493,4 @@ Copyright (c) 2026 Samrat Maurya and Velsora Contributors
 ---
 
 *Built for robust, verifiable, and explainable autonomous financial intelligence.*
+
