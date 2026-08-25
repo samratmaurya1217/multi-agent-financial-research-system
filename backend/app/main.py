@@ -72,19 +72,49 @@ if cors_origins_env:
         if o.strip() and o.strip() not in allowed_origins:
             allowed_origins.append(o.strip())
 
+# NOTE: When allow_credentials=True, browsers do NOT treat "*" as covering
+# the Authorization header — it must be listed explicitly.
+_ALLOW_HEADERS = [
+    "authorization",
+    "Authorization",
+    "content-type",
+    "Content-Type",
+    "accept",
+    "Accept",
+    "origin",
+    "Origin",
+    "x-requested-with",
+    "X-Requested-With",
+    "cache-control",
+    "Cache-Control",
+    "pragma",
+    "Pragma",
+    "x-workspace-id",
+    "X-Workspace-Id",
+]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_headers=_ALLOW_HEADERS,
+    expose_headers=["Content-Disposition", "Content-Length", "Content-Type", "X-Report-Id"],
 )
 
 @app.middleware("http")
 async def add_cors_headers_always(request, call_next):
-    origin = request.headers.get("origin")
+    origin = request.headers.get("origin", "")
+    is_trusted = bool(
+        origin and (
+            "onrender.com" in origin
+            or "vercel.app" in origin
+            or "localhost" in origin
+            or "127.0.0.1" in origin
+        )
+    )
+
     if request.method == "OPTIONS":
         from fastapi.responses import Response
         response = Response(status_code=200)
@@ -98,12 +128,14 @@ async def add_cors_headers_always(request, call_next):
                 status_code=500,
                 content={"detail": "An internal server error occurred. Please try again."}
             )
-    if origin and ("onrender.com" in origin or "vercel.app" in origin or "localhost" in origin or "127.0.0.1" in origin):
+
+    if is_trusted:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Expose-Headers"] = "*"
+        # Explicit header list — wildcards don't cover Authorization with credentials:include
+        response.headers["Access-Control-Allow-Headers"] = ", ".join(_ALLOW_HEADERS)
+        response.headers["Access-Control-Expose-Headers"] = "Content-Disposition, Content-Length, Content-Type, X-Report-Id"
     return response
 
 # ─── Startup ─────────────────────────────────────────────────────────────────
@@ -590,35 +622,63 @@ def get_documents(workspace_id: Optional[str] = Query(None), user: dict = Depend
     docs = list(documents_col().find({"workspace_id": ws_id}))
     return [_strip_mongo(d) for d in docs]
 
-def _run_document_pipeline_background(doc_id: str, ws_id: str):
+def _run_document_pipeline_background(doc_id: str, ws_id: str, file_path: str, filename: str):
+    """Full async pipeline: indexing → extraction → red flags. Runs in background thread."""
     from app.database import get_db
+    db = get_db()
+
+    # ── Step 1: Parse PDF and index chunks into MongoDB Atlas Vector Search ──
+    logger.info(f"[Pipeline] Starting indexing for {doc_id}")
+    try:
+        indexing_res = process_and_index_document(file_path, ws_id, doc_id, filename)
+        documents_col().update_one(
+            {"document_id": doc_id},
+            {"$set": {
+                "total_pages": indexing_res.get("total_pages", 1),
+                "total_chunks": indexing_res.get("chunk_count", 0),
+                "indexing_status": "complete",
+                "updated_at": _now()
+            }}
+        )
+        logger.info(f"[Pipeline] Indexing complete for {doc_id}: {indexing_res}")
+    except Exception as e:
+        logger.error(f"[Pipeline] Indexing failed for {doc_id}: {e}")
+        documents_col().update_one(
+            {"document_id": doc_id},
+            {"$set": {"indexing_status": "failed", "status": "failed", "updated_at": _now()}}
+        )
+        return  # Cannot run agents without indexed content
+
+    # ── Step 2: Extraction Agent ──
     try:
         from app.agents.extraction_agent import run_extraction_agent
         run_extraction_agent(doc_id, ws_id)
     except Exception as e:
         logger.error(f"[Pipeline] Extraction agent failed for {doc_id}: {e}")
-        get_db()["extracted_metrics"].update_one(
+        db["extracted_metrics"].update_one(
             {"document_id": doc_id},
             {"$set": {"extraction_status": "failed", "error": str(e)}},
             upsert=True
         )
 
+    # ── Step 3: Red Flag Agent ──
     try:
         from app.agents.red_flag_agent import run_red_flag_agent
         run_red_flag_agent(doc_id, ws_id)
     except Exception as e:
         logger.error(f"[Pipeline] Red flag agent failed for {doc_id}: {e}")
-        get_db()["red_flags"].update_one(
+        db["red_flags"].update_one(
             {"document_id": doc_id},
             {"$set": {"status": "failed", "error": str(e)}},
             upsert=True
         )
 
-    # Mark document as ready once background agents complete
+    # ── Step 4: Mark document ready ──
     documents_col().update_one(
         {"document_id": doc_id},
         {"$set": {"status": "ready", "updated_at": _now()}}
     )
+    logger.info(f"[Pipeline] Document {doc_id} pipeline complete — status: ready")
 
 @app.post("/documents")
 @app.post("/upload")
@@ -682,16 +742,7 @@ async def upload_document_sad(
         upsert=True
     )
 
-    # Trigger LangGraph ingestion + MongoDB Atlas Vector Search indexing pipeline
-    indexing_res = {"total_pages": 1, "chunk_count": 0}
-    try:
-        indexing_res = process_and_index_document(file_path, ws_id, doc_id, file.filename)
-    except Exception as e:
-        logger.error(f"Document indexing warning: {e}")
-
-    # Trigger Extraction Agent & Red Flag Agent in background
-    background_tasks.add_task(_run_document_pipeline_background, doc_id, ws_id)
-
+    # Save initial document record immediately — return to the client now
     doc_meta = {
         "document_id": doc_id,
         "workspace_id": ws_id,
@@ -699,16 +750,22 @@ async def upload_document_sad(
         "file_type": ext,
         "storage_path": file_path,
         "status": "processing",
-        "total_pages": indexing_res.get("total_pages", 1),
-        "total_chunks": indexing_res.get("chunk_count", 0),
+        "indexing_status": "pending",
+        "total_pages": 1,
+        "total_chunks": 0,
         "size_kb": round(len(content) / 1024),
         "uploaded_at": now,
+        "updated_at": now,
     }
     documents_col().update_one({"document_id": doc_id}, {"$set": doc_meta}, upsert=True)
     workspaces_col().update_one(
         {"workspace_id": ws_id},
         {"$addToSet": {"document_manifest": doc_id}, "$set": {"updated_at": now}}
     )
+
+    # Kick off the full pipeline (indexing → extraction → red flags) in background
+    background_tasks.add_task(_run_document_pipeline_background, doc_id, ws_id, file_path, file.filename)
+
     return _strip_mongo(doc_meta)
 
 @app.get("/documents/{document_id}/red_flags")
