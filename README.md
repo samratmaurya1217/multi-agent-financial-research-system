@@ -33,7 +33,7 @@ By combining **LangGraph-driven multi-agent orchestration**, **MongoDB Atlas Vec
   - [Frontend Setup](#2-frontend-setup)
   - [Database & Vector Index Setup](#3-mongodb-atlas-configuration)
 - [Environment Configuration Reference](#-environment-configuration-reference)
-- [Live Deployment Links](#-live-deployment--links)
+- [Authors & Acknowledgments](#-authors--acknowledgments)
 
 ---
 
@@ -445,7 +445,7 @@ Every database query strictly enforces workspace boundary checks. Documents, vec
 | `OPENROUTER_MODEL` | No | Model slug on OpenRouter | `nvidia/nemotron-3-ultra-550b-a55b` |
 | `GEMINI_API_KEY` | Optional | Google Gemini API Key (Fallback 1) | `AIzaSy...` |
 | `GROQ_API_KEY` | Optional | Groq API Key (Fallback 2) | `gsk_...` |
-| `FIREBASE_PROJECT_ID` | Optional | Firebase Project ID for token validation | `velsora-29767` |
+| `FIREBASE_PROJECT_ID` | Optional | Firebase Project ID for token validation | `your_project_id` |
 
 ### Frontend (`frontend/.env`)
 
