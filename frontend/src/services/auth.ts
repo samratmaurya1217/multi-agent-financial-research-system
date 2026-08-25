@@ -1,29 +1,36 @@
 import { apiPost, apiGet } from "./api";
 import {
-  auth,
-  createUserWithEmailAndPassword,
+  isFirebaseConfigured,
+  getAuthInstance,
+  getGoogleProviderInstance,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signInWithPopup,
-  googleProvider,
   signOut,
+  sendPasswordResetEmail,
 } from "./firebase";
 
 export interface AuthUser {
-  // Official SAD Section 14.4 properties
   user_id: string;
   email: string;
   role: "analyst" | "admin" | "viewer" | "Student" | "Analyst" | "Team" | string;
   created_at?: string;
-
-  // UI aliases (zero-crash strategy)
   id: string;
   name: string;
   avatarInitials: string;
   workspaceId?: string;
 }
 
-export interface LoginPayload { email: string; password: string; }
-export interface RegisterPayload { name: string; email: string; password: string; }
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface RegisterPayload {
+  name: string;
+  email: string;
+  password: string;
+}
 
 export function normalizeUser(data: any): AuthUser {
   const user_id = data.user_id || data.id || data.firebaseUid || "usr_01";
@@ -31,7 +38,12 @@ export function normalizeUser(data: any): AuthUser {
   const name = data.name || data.displayName || email.split("@")[0] || "User";
   const avatarInitials =
     data.avatarInitials ||
-    name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) ||
+    name
+      .split(" ")
+      .map((n: string) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) ||
     "U";
 
   return {
@@ -47,39 +59,79 @@ export function normalizeUser(data: any): AuthUser {
   };
 }
 
+export function mapFirebaseAuthError(err: any, fallbackMessage: string): string {
+  const code = err?.code || "";
+  const msg = err?.message || "";
+
+  switch (code) {
+    case "auth/invalid-api-key":
+    case "auth/api-key-not-valid":
+      return "Firebase API Key is invalid. Please verify your VITE_FIREBASE_* environment variables.";
+    case "auth/unauthorized-domain":
+      return "This domain (velsora-xfkq.onrender.com) is not in Firebase Authorized Domains. Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.";
+    case "auth/operation-not-allowed":
+      return "Google Sign-In is not enabled in Firebase Console. Enable it in Authentication -> Sign-in method.";
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+      return "Sign-in was closed before completing.";
+    case "auth/popup-blocked":
+      return "Sign-in popup was blocked by your browser. Please allow popups for this site.";
+    case "auth/email-already-in-use":
+      return "An account with this email already exists. Please sign in instead.";
+    case "auth/weak-password":
+      return "Password is too weak. Please use at least 6 characters.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Invalid email or password. Please verify your credentials.";
+    case "auth/network-request-failed":
+      return "Network connection error. Please check your internet connection.";
+    case "auth/too-many-requests":
+      return "Access temporarily blocked due to many failed attempts. Please reset your password or try again later.";
+    default:
+      if (msg.includes("Cannot read properties of undefined (reading 'app')")) {
+        return "Firebase is not configured yet. Please use Email and Password or configure Firebase keys in Render.";
+      }
+      return msg || fallbackMessage;
+  }
+}
+
 export async function register(payload: RegisterPayload): Promise<AuthUser> {
   let idToken = "";
   let firebaseUid = "";
 
-  // 1. Create account in Firebase Authentication (shows in Firebase Console)
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, payload.email, payload.password);
-    idToken = await cred.user.getIdToken();
-    firebaseUid = cred.user.uid;
-  } catch (fbErr: any) {
-    console.warn("Firebase createUser note:", fbErr.code, fbErr.message);
-    if (fbErr.code === "auth/email-already-in-use") {
-      throw new Error("An account with this email already exists in Firebase. Please sign in instead.");
+  // 1. If Firebase is configured, create the user in Firebase Auth
+  if (isFirebaseConfigured()) {
+    try {
+      const auth = getAuthInstance();
+      const cred = await createUserWithEmailAndPassword(auth, payload.email.trim(), payload.password);
+      idToken = await cred.user.getIdToken();
+      firebaseUid = cred.user.uid;
+    } catch (fbErr: any) {
+      // If error is explicit user constraint (e.g. email in use), surface it
+      if (
+        fbErr.code === "auth/email-already-in-use" ||
+        fbErr.code === "auth/weak-password" ||
+        fbErr.code === "auth/invalid-email"
+      ) {
+        throw new Error(mapFirebaseAuthError(fbErr, "Registration failed."));
+      }
+      console.warn("[Auth] Firebase signup skipped:", fbErr.message);
     }
-    if (fbErr.code === "auth/weak-password") {
-      throw new Error("Password is too weak. Please use at least 6 characters.");
-    }
-    if (fbErr.code === "auth/invalid-email") {
-      throw new Error("Please enter a valid email address.");
-    }
-    // If Firebase service is unavailable or rejected, proceed with backend registration
   }
 
-  // 2. Sync with MongoDB Atlas backend database
+  // 2. Register & sync with backend database
   const data = await apiPost<any>("/auth/register", {
-    name: payload.name,
-    email: payload.email,
+    name: payload.name.trim(),
+    email: payload.email.trim(),
     password: payload.password,
     firebaseUid,
     idToken,
   });
 
-  const activeToken = idToken || data.token;
+  const activeToken = data.token || idToken;
   if (activeToken) {
     localStorage.setItem("velsora_token", activeToken);
   }
@@ -89,29 +141,26 @@ export async function register(payload: RegisterPayload): Promise<AuthUser> {
 export async function login(payload: LoginPayload): Promise<AuthUser> {
   let idToken = "";
 
-  // 1. Authenticate with Firebase Authentication
-  try {
-    const cred = await signInWithEmailAndPassword(auth, payload.email, payload.password);
-    idToken = await cred.user.getIdToken();
-  } catch (fbErr: any) {
-    console.warn("Firebase signIn note:", fbErr.code, fbErr.message);
-    if (fbErr.code === "auth/wrong-password" || fbErr.code === "auth/invalid-credential") {
-      throw new Error("Invalid password or credentials. Please check and try again.");
+  // 1. If Firebase is configured, attempt Firebase authentication
+  if (isFirebaseConfigured()) {
+    try {
+      const auth = getAuthInstance();
+      const cred = await signInWithEmailAndPassword(auth, payload.email.trim(), payload.password);
+      idToken = await cred.user.getIdToken();
+    } catch (fbErr: any) {
+      // If Firebase rejects password, let backend handle verification
+      console.warn("[Auth] Firebase signIn note:", fbErr.code, fbErr.message);
     }
-    if (fbErr.code === "auth/user-not-found") {
-      throw new Error("No user found with this email in Firebase. Please create an account.");
-    }
-    // Fallback to backend authentication if Firebase encounters domain restrictions
   }
 
-  // 2. Sync with MongoDB Atlas backend database
+  // 2. Authenticate with backend database
   const data = await apiPost<any>("/auth/login", {
-    email: payload.email,
+    email: payload.email.trim(),
     password: payload.password,
     idToken,
   });
 
-  const activeToken = idToken || data.token;
+  const activeToken = data.token || idToken;
   if (activeToken) {
     localStorage.setItem("velsora_token", activeToken);
   }
@@ -119,42 +168,69 @@ export async function login(payload: LoginPayload): Promise<AuthUser> {
 }
 
 export async function loginWithGoogle(): Promise<AuthUser> {
+  if (!isFirebaseConfigured()) {
+    throw new Error(
+      "Google Sign-In requires Firebase to be configured in Render environment variables. Please use Email and Password or configure Firebase."
+    );
+  }
+
   try {
-    const cred = await signInWithPopup(auth, googleProvider);
+    const auth = getAuthInstance();
+    const provider = getGoogleProviderInstance();
+    const cred = await signInWithPopup(auth, provider);
+
     if (!cred.user || !cred.user.email) {
-      throw new Error("No account email returned from Google Sign-In.");
+      throw new Error("No email returned from Google authentication.");
     }
-    const token = await cred.user.getIdToken().catch(() => "");
+
+    const idToken = await cred.user.getIdToken().catch(() => "");
+
     const data = await apiPost<any>("/auth/google", {
       email: cred.user.email,
       name: cred.user.displayName || cred.user.email.split("@")[0],
       avatarUrl: cred.user.photoURL || "",
-      idToken: token,
+      idToken,
     });
+
     if (data.token) {
       localStorage.setItem("velsora_token", data.token);
     }
     return normalizeUser(data.user || data);
   } catch (err: any) {
     console.error("Google sign-in error:", err);
-    if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") {
-      throw new Error("Google sign-in popup was closed before completing.");
-    }
-    if (err.code === "auth/unauthorized-domain") {
-      throw new Error("127.0.0.1 is not in Firebase Authorized Domains. Access via http://localhost:5173 or use Email & Password.");
-    }
-    if (err.code === "auth/operation-not-allowed" || err.code === "auth/configuration-not-found") {
-      throw new Error("Google Sign-In provider is not enabled in Firebase console. Please use Email and Password.");
-    }
-    if (err.code === "auth/popup-blocked") {
-      throw new Error("Sign-in popup was blocked by browser. Please enable popups and try again.");
-    }
-    throw new Error(err.message || "Google Sign-In failed. Please use your email and password.");
+    throw new Error(mapFirebaseAuthError(err, "Google Sign-In failed. Please try again."));
   }
 }
 
+export async function resetPassword(email: string): Promise<string> {
+  if (!email || !email.trim() || !email.includes("@")) {
+    throw new Error("Please enter a valid email address to reset your password.");
+  }
+
+  if (isFirebaseConfigured()) {
+    try {
+      const auth = getAuthInstance();
+      await sendPasswordResetEmail(auth, email.trim());
+      return "Password reset link has been sent to your email address.";
+    } catch (err: any) {
+      console.warn("Firebase password reset error:", err);
+      throw new Error(mapFirebaseAuthError(err, "Could not send password reset email."));
+    }
+  }
+
+  // Fallback for native auth
+  return "If an account exists with this email, password reset instructions have been logged.";
+}
+
 export async function logout(): Promise<void> {
-  await signOut(auth).catch(() => {});
+  if (isFirebaseConfigured()) {
+    try {
+      const auth = getAuthInstance();
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
+  }
   await apiPost("/auth/logout").catch(() => {});
   localStorage.removeItem("velsora_token");
   localStorage.removeItem("velsora_user");

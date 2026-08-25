@@ -5,13 +5,14 @@ import { useAuth } from "@/store/authStore";
 import { Eye, EyeOff, AlertCircle, ArrowRight } from "lucide-react";
 
 export function SignUpPage() {
-  const { register, loginWithGoogle, isLoading, error } = useAuth();
+  const { register, loginWithGoogle, isLoading, error, clearError } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [showPw, setShowPw] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    clearError();
     try {
       await register(form);
       navigate("/dashboard");
@@ -21,6 +22,7 @@ export function SignUpPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    clearError();
     try {
       await loginWithGoogle();
       navigate("/dashboard");
@@ -46,7 +48,7 @@ export function SignUpPage() {
         </p>
       </div>
 
-      {/* Google Auth Button (FintechX Light Style) */}
+      {/* Google Auth Button */}
       <div className="mb-6">
         <button
           type="button"
@@ -74,7 +76,7 @@ export function SignUpPage() {
         </span>
       </div>
 
-      {/* Form matching sentence-case reference image */}
+      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4 text-left">
         {error && (
           <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold leading-relaxed shadow-xs">
@@ -110,7 +112,7 @@ export function SignUpPage() {
           </div>
         ))}
 
-        {/* Primary Submit Button (FintechX Blue Style) */}
+        {/* Primary Submit Button */}
         <div className="pt-2">
           <button
             type="submit"

@@ -1,11 +1,37 @@
-// Base API client — Velsora backend at http://localhost:8000
-// All mock flags removed. Real FastAPI backend is used for all requests.
-
-export const BASE_URL = import.meta.env.VITE_API_URL ?? (typeof window !== "undefined" && window.location.hostname ? `http://${window.location.hostname}:8000` : "http://127.0.0.1:8000");
+// Base API client — Velsora backend
+export const BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  (typeof window !== "undefined" && window.location.hostname
+    ? `http://${window.location.hostname}:8000`
+    : "http://127.0.0.1:8000");
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem("velsora_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function extractErrorMessage(res: Response, defaultMsg: string): Promise<string> {
+  try {
+    const data = await res.json();
+    if (typeof data.detail === "string" && data.detail.trim()) {
+      return data.detail;
+    }
+    if (typeof data.message === "string" && data.message.trim()) {
+      return data.message;
+    }
+    if (Array.isArray(data.detail) && data.detail.length > 0) {
+      return data.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+    }
+  } catch {
+    // If not JSON, try text
+    try {
+      const text = await res.text();
+      if (text.trim()) return text;
+    } catch {
+      // ignore
+    }
+  }
+  return defaultMsg;
 }
 
 function handleAuthError(res: Response) {
@@ -22,7 +48,8 @@ export async function apiGet<T>(path: string): Promise<T> {
   });
   if (!res.ok) {
     handleAuthError(res);
-    throw new Error(`GET ${path} failed: ${res.status}`);
+    const msg = await extractErrorMessage(res, `Request failed with status ${res.status}`);
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
@@ -36,7 +63,8 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   });
   if (!res.ok) {
     handleAuthError(res);
-    throw new Error(`POST ${path} failed: ${res.status}`);
+    const msg = await extractErrorMessage(res, `Request failed with status ${res.status}`);
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
@@ -49,7 +77,8 @@ export async function apiDelete(path: string): Promise<void> {
   });
   if (!res.ok) {
     handleAuthError(res);
-    throw new Error(`DELETE ${path} failed: ${res.status}`);
+    const msg = await extractErrorMessage(res, `Request failed with status ${res.status}`);
+    throw new Error(msg);
   }
 }
 
@@ -62,11 +91,11 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
   });
   if (!res.ok) {
     handleAuthError(res);
-    throw new Error(`UPLOAD ${path} failed: ${res.status}`);
+    const msg = await extractErrorMessage(res, `Upload failed with status ${res.status}`);
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
-
 
 export function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

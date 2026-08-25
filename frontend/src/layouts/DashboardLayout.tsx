@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Bell, ChevronLeft, Search, ChevronDown } from "lucide-react";
 import { TwoLevelSidebar } from "@/components/ui/sidebar-component";
 import { useAuth } from "@/store/authStore";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // Route to friendly name mapping
 const routeTitles: Record<string, string> = {
@@ -18,10 +18,16 @@ const routeTitles: Record<string, string> = {
 };
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchVal, setSearchVal] = useState("");
+
+  useEffect(() => {
+    if (!isLoading && !user && !localStorage.getItem("velsora_token")) {
+      navigate("/login", { replace: true });
+    }
+  }, [user, isLoading, navigate]);
 
   const currentTitle = routeTitles[location.pathname] || "Dashboard";
   const isRoot = location.pathname === "/dashboard";

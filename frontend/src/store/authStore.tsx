@@ -4,6 +4,7 @@ import {
   login as apiLogin,
   register as apiRegister,
   loginWithGoogle as apiLoginGoogle,
+  resetPassword as apiResetPassword,
   logout as apiLogout,
   getMe,
 } from "@/services/auth";
@@ -16,7 +17,9 @@ interface AuthState {
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  resetPassword: (email: string) => Promise<string>;
   logout: () => Promise<void>;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -25,6 +28,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const clearError = useCallback(() => setError(null), []);
 
   useEffect(() => {
     const token = localStorage.getItem("velsora_token");
@@ -48,7 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const u = await apiLogin(payload);
       setUser(u);
     } catch (err: any) {
-      setError(err.message || "Invalid credentials. Please try again.");
+      const msg = err?.message || "Invalid credentials. Please try again.";
+      setError(msg);
       throw err;
     } finally {
       setIsLoading(false);
@@ -62,7 +68,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const u = await apiRegister(payload);
       setUser(u);
     } catch (err: any) {
-      setError(err.message || "Registration failed. Please try again.");
+      const msg = err?.message || "Registration failed. Please try again.";
+      setError(msg);
       throw err;
     } finally {
       setIsLoading(false);
@@ -76,14 +83,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const u = await apiLoginGoogle();
       setUser(u);
     } catch (err: any) {
-      if (err.message?.includes("auth/invalid-api-key") || err.code === "auth/invalid-api-key") {
-        setError("Firebase API Key is missing or invalid. Please check your .env file.");
-      } else {
-        setError(err.message || "Google sign-in failed. Please try again.");
-      }
+      const msg = err?.message || "Google sign-in failed. Please try again.";
+      setError(msg);
       throw err;
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (email: string): Promise<string> => {
+    setError(null);
+    try {
+      return await apiResetPassword(email);
+    } catch (err: any) {
+      const msg = err?.message || "Could not reset password. Please try again.";
+      setError(msg);
+      throw err;
     }
   }, []);
 
@@ -102,7 +117,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         loginWithGoogle,
+        resetPassword,
         logout,
+        clearError,
       }}
     >
       {children}
