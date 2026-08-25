@@ -469,8 +469,17 @@ Every database query strictly enforces workspace boundary checks. Documents, vec
 
 ## 👥 Authors & Acknowledgments
 
-- **Samrat Maurya** ([@samratmaurya1217](https://github.com/samratmaurya1217))
-- **Team 2** — Infosys Springboard Virtual Internship 7.0
+### Project Team — **Team 2** (Infosys Springboard Virtual Internship 7.0)
+
+| Team Member | GitHub Profile |
+| :--- | :--- |
+| **Samrat Maurya** | [@samratmaurya1217](https://github.com/samratmaurya1217) |
+| **Akshith Bhupathi** | [@06102006-Ak](https://github.com/06102006-Ak) |
+| **Leela Harshitha Raavi** | [@leelaharshitha-raavi](https://github.com/leelaharshitha-raavi) |
+| **Snigdha** | [@Snigdha-02](https://github.com/Snigdha-02) |
+| **Thirumala** | [@thirumala95](https://github.com/thirumala95) |
+
+Special thanks to **Infosys Springboard** mentors and evaluators for their continuous guidance throughout the **Virtual Internship 7.0**.
 
 ---
 
