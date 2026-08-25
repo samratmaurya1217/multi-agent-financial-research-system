@@ -22,21 +22,26 @@ from typing import TypedDict, List, Optional, Any, Dict
 import fitz  # PyMuPDF
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.graph import StateGraph, END
-from sentence_transformers import SentenceTransformer
-
 from app.database import get_db
 
 logger = logging.getLogger("velsora.document_agent")
 
-_embedding_model: Optional[SentenceTransformer] = None
+_embedding_model: Optional[Any] = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model() -> Any:
     """Singleton loader for local sentence transformer embedding model (384 dimensions)."""
     global _embedding_model
     if _embedding_model is None:
-        logger.info("[Document Agent] Initializing SentenceTransformer 'all-MiniLM-L6-v2'...")
-        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        try:
+            import torch
+            torch.set_grad_enabled(False)
+            torch.set_num_threads(1)
+        except Exception:
+            pass
+        from sentence_transformers import SentenceTransformer
+        logger.info("[Document Agent] Initializing SentenceTransformer 'all-MiniLM-L6-v2' on CPU...")
+        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
     return _embedding_model
 
 
