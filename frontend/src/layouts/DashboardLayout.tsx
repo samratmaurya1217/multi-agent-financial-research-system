@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronDown } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { TwoLevelSidebar } from "@/components/ui/sidebar-component";
 import { useAuth } from "@/store/authStore";
 import { useEffect } from "react";
@@ -71,7 +71,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <span className="text-xs font-semibold text-slate-700 max-w-[120px] truncate hidden sm:inline">
                   {user.name}
                 </span>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
               </div>
             )}
           </div>
