@@ -19,6 +19,7 @@ interface AuthState {
   loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<string>;
   logout: () => Promise<void>;
+  updateUser: (fields: Partial<AuthUser>) => void;
   clearError: () => void;
 }
 
@@ -107,6 +108,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((fields: Partial<AuthUser>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...fields };
+      if (fields.name) {
+        const parts = fields.name.trim().split(" ");
+        updated.avatarInitials = parts.length > 1
+          ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+          : (parts[0]?.slice(0, 2) || "AN").toUpperCase();
+      }
+      return updated;
+    });
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -119,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginWithGoogle,
         resetPassword,
         logout,
+        updateUser,
         clearError,
       }}
     >
