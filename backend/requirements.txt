@@ -4,6 +4,9 @@ fastapi==0.111.0
 uvicorn==0.30.1
 pydantic==2.7.4
 pymupdf==1.24.5
+reportlab>=4.1.0
+numpy>=1.26.0
+dnspython>=2.6.0
 langchain==0.2.5
 langchain-community==0.2.5
 langchain-text-splitters==0.2.1
