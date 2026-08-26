@@ -572,20 +572,25 @@ export function UploadPage() {
                                     const sev = String(rf.severity || rf.Severity || "Medium").toLowerCase();
                                     const severityLabel =
                                       sev === "critical" || sev === "high" ? "High" : sev === "low" ? "Low" : "Medium";
-                                    const icon = severityLabel === "High" ? "🟥" : severityLabel === "Medium" ? "🟧" : "🟦";
                                     const confVal =
                                       typeof rf.confidence === "number"
                                         ? rf.confidence > 1
                                           ? Math.round(rf.confidence)
                                           : Math.round(rf.confidence * 100)
                                         : String(rf.confidence || "95").replace("%", "");
+                                    const trigger = rf.trigger || rf.flag || rf.risk_title || "Risk Factor Identified";
+                                    const desc = rf.reasoning || rf.description || "Document risk finding identified by AI Agent.";
+                                    const evidence = rf.evidence || rf.snippet || desc;
+                                    const category = rf.category || "Governance";
+
                                     return {
-                                      icon,
                                       severity: severityLabel,
-                                      trigger: rf.trigger || rf.flag || rf.category || "Risk Factor Identified",
+                                      category,
+                                      trigger,
                                       confidence: `${confVal}%`,
                                       page: rf.page || 1,
-                                      description: rf.description || rf.reasoning || "Document risk finding identified by AI Agent.",
+                                      description: desc,
+                                      evidence,
                                     };
                                   })
                                 : [];
@@ -599,51 +604,70 @@ export function UploadPage() {
                             }
 
                             return (
-                              <div className="grid md:grid-cols-3 gap-4">
-                                {redFlagsToDisplay.map((rf: any, idx: number) => (
-                                  <div
-                                    key={idx}
-                                    className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col justify-between gap-3 shadow-2xs hover:bg-white hover:border-slate-300 hover:shadow-md transition-all"
-                                  >
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-3">
-                                        <div className="flex items-center gap-1.5 font-black text-slate-800 text-sm">
-                                          <span>{rf.icon}</span>
-                                          <span>{rf.severity}</span>
+                              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {redFlagsToDisplay.map((rf: any, idx: number) => {
+                                  const isHigh = rf.severity === "High";
+                                  const isMed = rf.severity === "Medium";
+                                  const sevBadgeClass = isHigh
+                                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                                    : isMed
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-blue-50 text-blue-700 border-blue-200";
+
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between gap-4 shadow-2xs hover:border-slate-300 hover:shadow-md transition-all"
+                                    >
+                                      <div>
+                                        <div className="flex items-center justify-between gap-2 mb-3">
+                                          <span
+                                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black border uppercase tracking-wider ${sevBadgeClass}`}
+                                          >
+                                            <span className={`h-1.5 w-1.5 rounded-full ${isHigh ? "bg-rose-600" : isMed ? "bg-amber-600" : "bg-blue-600"}`} />
+                                            {rf.severity} Severity
+                                          </span>
+                                          <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                            {rf.category}
+                                          </span>
+                                        </div>
+
+                                        <h4 className="text-sm font-extrabold text-slate-900 mb-2 leading-snug">
+                                          {rf.trigger}
+                                        </h4>
+
+                                        <p className="text-xs text-slate-600 leading-relaxed font-medium mb-3 line-clamp-3">
+                                          {rf.description}
+                                        </p>
+
+                                        <div className="flex items-center justify-between text-xs text-slate-500 font-semibold pt-2 border-t border-slate-100">
+                                          <span>
+                                            Confidence: <strong className="text-slate-800">{rf.confidence}</strong>
+                                          </span>
+                                          <span>
+                                            Page: <strong className="text-slate-800">{rf.page}</strong>
+                                          </span>
                                         </div>
                                       </div>
 
-                                      <h4 className="text-sm font-extrabold text-slate-900 mb-2 leading-snug">
-                                        {rf.trigger}
-                                      </h4>
-
-                                      <div className="space-y-1 text-xs text-slate-600 font-semibold mb-3">
-                                        <p>
-                                          Confidence: <strong className="text-slate-800">{rf.confidence}</strong>
-                                        </p>
-                                        <p>
-                                          Page: <strong className="text-slate-800">{rf.page}</strong>
-                                        </p>
+                                      <div className="pt-2">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setCitationModal({
+                                              title: rf.trigger,
+                                              page: rf.page,
+                                              text: `Grounding Evidence (Page ${rf.page}):\n\n"${rf.evidence}"\n\nAnalyst Rationale:\n${rf.description}`,
+                                            })
+                                          }
+                                          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" /> View Source Citation
+                                        </button>
                                       </div>
                                     </div>
-
-                                    <div className="pt-3 border-t border-slate-200/80 flex items-center justify-between">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setCitationModal({
-                                            title: rf.trigger,
-                                            page: rf.page,
-                                            text: `Grounding Citation: ${rf.description} (Page ${rf.page})`,
-                                          })
-                                        }
-                                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold text-xs hover:bg-blue-100 transition-colors"
-                                      >
-                                        <Eye className="h-3.5 w-3.5" /> View Source
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             );
                           })()}

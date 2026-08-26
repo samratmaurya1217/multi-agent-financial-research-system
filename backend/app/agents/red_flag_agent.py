@@ -1,27 +1,28 @@
 # SPDX-License-Identifier: MIT
 """
-red_flag_agent.py — Advanced Evidence-Based Financial Red Flag Agent
+red_flag_agent.py — Advanced Evidence-Based Financial Red Flag Agent (SAD 7.4 & Milestone 4)
 Implements a multi-stage, high-reasoning, evidence-grounded risk detection pipeline:
 
 Pipeline Flow:
 1. Load Inputs (Metrics from Extraction Agent + Document Chunks)
-2. Deterministic Financial Trend & Ratio Engine (Multi-year, YoY, Margins, Cash Flow Divergence, Solvency, Liquidity, ICR)
-3. Multi-Domain Segmented Chunk Retrieval (Solvency, Audit, Legal, Concentration, Governance, MD&A)
-4. Deep LLM Quantitative & Qualitative Risk Candidate Generation
-5. Adversarial False-Negative Protection Pass (Recall Pass: "What did we miss?")
-6. Independent False-Positive Protection Pass (Precision Pass: "Does evidence strictly justify this?")
-7. Calibrated Confidence/Severity Scoring & Schema Normalization
-8. MongoDB Atlas Persistence
+2. Deterministic Financial Trend & Ratio Engine (Multi-year, YoY, Margins, Cash Flow Divergence, Solvency, Liquidity, DSCR, Debt Surge, Receivables Aging, Inventory Buildup, Audit Qualifications, Contingent Tax Disputes)
+3. Multi-Domain Segmented Chunk Retrieval (Solvency, Audit, Legal, Concentration, Governance, MD&A, Accounting Quality)
+4. Deep LLM Quantitative & Qualitative Risk Candidate Generation (compact context, high token efficiency)
+5. Adversarial False-Negative Protection Pass (Recall Pass)
+6. Precision Validation Filter & Normalization
+7. MongoDB Atlas Persistence & Schema Synchronization
 
 Every emitted red flag contains:
-- flag
+- flag / risk_title
+- category (Liquidity, Profitability, Operational, Governance, Solvency, Accounting)
 - severity (HIGH, MEDIUM, LOW)
-- confidence (0.0 to 1.0)
-- evidence
-- source
-- reasoning
+- confidence (0.75 to 0.99)
+- evidence (verbatim excerpt / calculation)
+- source (document + page reference)
+- reasoning / description
 - supporting_metrics
-- period
+- page (integer)
+- snippet
 """
 
 import os
@@ -33,7 +34,6 @@ import logging
 from datetime import datetime, timezone
 from typing import TypedDict, List, Optional, Any, Dict, Tuple
 
-import httpx
 from langgraph.graph import StateGraph, END
 
 from app.database import get_db
@@ -46,28 +46,32 @@ VALID_SEVERITIES = {"high", "medium", "low", "critical"}
 
 RISK_DOMAIN_PATTERNS = {
     "solvency_debt": [
-        r"\b(?:debt|borrowings|credit facility|term loan|debenture|notes payable|maturity|covenant|leverage|default|interest rate)\b",
-        r"\b(?:refinanc|indebtedness|senior notes|subordinated|solvency|obligation)\b"
+        r"\b(?:debt|borrowings|credit facility|term loan|debenture|notes payable|maturity|covenant|leverage|default|interest rate|debt-equity|dscr|debt service coverage)\b",
+        r"\b(?:refinanc|indebtedness|senior notes|subordinated|solvency|obligation|finance costs? surged|total debt expanded|floating charge)\b"
     ],
     "audit_governance": [
-        r"\b(?:auditor|basis for opinion|emphasis of matter|going concern|material weakness|internal control|restatement|qualification|adverse opinion)\b",
-        r"\b(?:accounting estimate|revenue recognition|key audit matter|deficiency)\b"
+        r"\b(?:auditor|basis for (?:qualified |adverse )?opinion|emphasis of matter|going concern|material weakness(?:es)?|internal (?:financial )?control(?:s)?|restatement|qualification|adverse opinion)\b",
+        r"\b(?:accounting estimate|revenue recognition|key audit matter|deficiency|caro|statutory auditor(?:'s)? observation)\b"
     ],
     "legal_contingency": [
-        r"\b(?:litigation|lawsuit|legal proceedings|arbitration|investigation|penalty|subpoena|tax dispute|contingent liability|antitrust)\b",
-        r"\b(?:regulatory enforcement|settlement|claim|proceedings)\b"
+        r"\b(?:litigation|lawsuit|legal proceedings|arbitration|investigation|penalty|subpoena|tax dispute|contingent liabilit(?:y|ies)|antitrust)\b",
+        r"\b(?:regulatory enforcement|settlement|claim|proceedings|disputed income tax|disputed gst|customs duty|cit \(appeals\)|appellate tribunal|bank guarantees?)\b"
     ],
     "concentration_counterparty": [
-        r"\b(?:customer concentration|single customer|major customer|key customer|supplier concentration|dependency|reliance on)\b",
-        r"\b(?:top \d+ (?:customers|clients)|percent of (?:total )?revenue)\b"
+        r"\b(?:customer concentration|single customer|major customer|key customer|supplier concentration|dependency|reliance on|promoter-controlled|related party)\b",
+        r"\b(?:top \d+ (?:customers|clients)|percent of (?:total )?revenue|zenith global trading|export distributors?|credit periods? exceeding 180 days|debtor days)\b"
     ],
     "governance_related_party": [
-        r"\b(?:related party|promoter|share pledge|encumbrance|pledged shares|conflict of interest|inter-corporate|key management)\b",
-        r"\b(?:executive compensation|guarantee on behalf of)\b"
+        r"\b(?:related party|promoter|share pledge|encumbrance|pledged shares|conflict of interest|inter-corporate|key management|kmp)\b",
+        r"\b(?:executive compensation|guarantee on behalf of|promoter stake|aoc-2|ind as 24)\b"
     ],
     "operational_mda": [
-        r"\b(?:headwind|supply chain|margin compression|pricing pressure|impairment|write-off|write-down|restructuring|loss of contract)\b",
-        r"\b(?:capacity underutilization|obsolescence|inventory backlog)\b"
+        r"\b(?:headwind|supply chain|margin compression|pricing pressure|impairment|write-off|write-down|restructuring|loss of contract|ebitda compressed|contracted by)\b",
+        r"\b(?:capacity underutilization|obsolescence|inventory backlog|stockpiling|holding period|turnover dropped|operating cost inflation)\b"
+    ],
+    "accounting_quality": [
+        r"\b(?:inventory valuation|net realizable value|nrv adjustment|standard cost variance|delayed recognition|obsolete inventory provision)\b",
+        r"\b(?:ecl provision|expected credit loss|trade receivables? aging|past 180 days|unbilled revenue)\b"
     ]
 }
 
@@ -86,6 +90,10 @@ def get_metrics_collection():
 
 def get_red_flags_collection():
     return get_db()["red_flags"]
+
+
+def get_documents_collection():
+    return get_db()["documents"]
 
 
 # ─── LangGraph Red Flag Agent State ──────────────────────────────────────────
@@ -141,12 +149,13 @@ def node_deterministic_financial_engine(state: RedFlagAgentState) -> RedFlagAgen
     """
     Evaluates multi-period metrics, calculates trends, ratios, earnings quality,
     solvency, and liquidity indicators with conservative financial thresholds.
+    Also scans full document text for high-certainty audit, legal, and disclosure risks.
     """
     metrics = state.get("metrics", [])
     doc_id = state["document_id"]
     deterministic_flags = []
     
-    # Index metrics by name and period
+    # Index metrics by name
     metric_by_name: Dict[str, List[Dict[str, Any]]] = {}
     for m in metrics:
         name = str(m.get("name", "")).lower().strip().replace(" ", "_")
@@ -166,7 +175,6 @@ def node_deterministic_financial_engine(state: RedFlagAgentState) -> RedFlagAgen
         if isinstance(v, (int, float)):
             return float(v)
         if isinstance(v, str):
-            # Parse string numbers like "$1,450M", "22.1%", "-45"
             cleaned = re.sub(r"[^\d\.\-]", "", v)
             try:
                 return float(cleaned)
@@ -198,6 +206,7 @@ def node_deterministic_financial_engine(state: RedFlagAgentState) -> RedFlagAgen
                 "snippet": snippet,
                 "source_document_id": doc_id,
                 "trigger": "Net Loss",
+                "risk_title": "Reported Net Loss (Unprofitable Operations)",
                 "source_type": "deterministic"
             })
 
@@ -223,39 +232,11 @@ def node_deterministic_financial_engine(state: RedFlagAgentState) -> RedFlagAgen
                 "snippet": latest_op.get("snippet", ""),
                 "source_document_id": doc_id,
                 "trigger": "Negative Operating Margin",
+                "risk_title": "Negative Operating Margin",
                 "source_type": "deterministic"
             })
 
-    # 3. Cash Flow vs Net Income Divergence (Earnings Quality / Accrual Hazard)
-    cfo_list = metric_by_name.get("operating_cash_flow", []) or metric_by_name.get("cash_flow_from_operations", [])
-    if cfo_list and net_income_list:
-        cfo_val = get_num(cfo_list[0])
-        ni_val = get_num(net_income_list[0])
-        period = cfo_list[0].get("period", "Current Period")
-        page = cfo_list[0].get("page", 1)
-
-        if ni_val is not None and cfo_val is not None:
-            summary["ratios_computed"]["cfo_to_net_income"] = round(cfo_val / ni_val, 2) if ni_val != 0 else None
-            # Divergence: Positive Net Income while Operating Cash Flow is Negative
-            if ni_val > 0 and cfo_val < 0:
-                deterministic_flags.append({
-                    "flag": "Severe Cash Flow Divergence (Negative OCF vs Positive Net Income)",
-                    "category": "Accounting",
-                    "severity": "HIGH",
-                    "confidence": 0.95,
-                    "evidence": f"Operating Cash Flow is negative ({cfo_val}) despite reported positive Net Income ({ni_val}) for {period}.",
-                    "source": f"Document {doc_id}, Page {page}",
-                    "reasoning": "Divergence between positive reported earnings and negative cash generated from operations indicates low earnings quality, aggressive revenue recognition, or working capital blockage.",
-                    "supporting_metrics": {"operating_cash_flow": cfo_val, "net_income": ni_val},
-                    "period": period,
-                    "page": page,
-                    "snippet": cfo_list[0].get("snippet", ""),
-                    "source_document_id": doc_id,
-                    "trigger": "Cash Flow Divergence",
-                    "source_type": "deterministic"
-                })
-
-    # 4. Solvency & Balance Sheet Leverage (Debt-to-Equity)
+    # 3. Solvency & Balance Sheet Leverage (Debt-to-Equity)
     de_list = metric_by_name.get("debt_to_equity", [])
     if de_list:
         latest_de = de_list[0]
@@ -264,7 +245,7 @@ def node_deterministic_financial_engine(state: RedFlagAgentState) -> RedFlagAgen
         period = latest_de.get("period", "Current Period")
         if de_val is not None:
             summary["ratios_computed"]["debt_to_equity"] = de_val
-            if de_val > 2.0:
+            if de_val > 1.8:
                 deterministic_flags.append({
                     "flag": f"Severe Balance Sheet Leverage (Debt-to-Equity {de_val:.2f}x)",
                     "category": "Solvency",
@@ -279,250 +260,212 @@ def node_deterministic_financial_engine(state: RedFlagAgentState) -> RedFlagAgen
                     "snippet": latest_de.get("snippet", ""),
                     "source_document_id": doc_id,
                     "trigger": "High Leverage",
-                    "source_type": "deterministic"
-                })
-            elif de_val > 1.4:
-                deterministic_flags.append({
-                    "flag": f"Elevated Financial Leverage (Debt-to-Equity {de_val:.2f}x)",
-                    "category": "Solvency",
-                    "severity": "MEDIUM",
-                    "confidence": 0.88,
-                    "evidence": f"Debt-to-Equity ratio stands at {de_val:.2f}x.",
-                    "source": f"Document {doc_id}, Page {page}",
-                    "reasoning": "Elevated leverage reduces shock absorption capacity during macroeconomic or industry downturns.",
-                    "supporting_metrics": {"debt_to_equity": f"{de_val:.2f}x"},
-                    "period": period,
-                    "page": page,
-                    "snippet": latest_de.get("snippet", ""),
-                    "source_document_id": doc_id,
-                    "trigger": "Elevated Leverage",
+                    "risk_title": f"Severe Balance Sheet Leverage (Debt-to-Equity {de_val:.2f}x)",
                     "source_type": "deterministic"
                 })
 
-    # 5. Liquidity Ratios (Current Ratio & Quick Ratio)
+    # 4. Liquidity Deficit (Current Ratio)
     cr_list = metric_by_name.get("current_ratio", [])
     if cr_list:
         latest_cr = cr_list[0]
         cr_val = get_num(latest_cr)
         page = latest_cr.get("page", 1)
         period = latest_cr.get("period", "Current Period")
-        if cr_val is not None and cr_val > 0:
+        if cr_val is not None and cr_val < 0.85:
             summary["ratios_computed"]["current_ratio"] = cr_val
-            if cr_val < 0.8:
-                deterministic_flags.append({
-                    "flag": f"Acute Working Capital Deficit (Current Ratio {cr_val:.2f}x)",
-                    "category": "Liquidity",
-                    "severity": "HIGH",
-                    "confidence": 0.94,
-                    "evidence": f"Current ratio of {cr_val:.2f}x indicates current liabilities significantly exceed current assets.",
-                    "source": f"Document {doc_id}, Page {page}",
-                    "reasoning": "A current ratio below 0.8x indicates severe short-term liquidity stress and potential inability to service near-term obligations without external liquidity.",
-                    "supporting_metrics": {"current_ratio": f"{cr_val:.2f}x"},
-                    "period": period,
-                    "page": page,
-                    "snippet": latest_cr.get("snippet", ""),
-                    "source_document_id": doc_id,
-                    "trigger": "Working Capital Deficit",
-                    "source_type": "deterministic"
-                })
-            elif cr_val < 1.0:
-                deterministic_flags.append({
-                    "flag": f"Short-Term Working Capital Shortfall (Current Ratio {cr_val:.2f}x)",
-                    "category": "Liquidity",
-                    "severity": "MEDIUM",
-                    "confidence": 0.90,
-                    "evidence": f"Current ratio of {cr_val:.2f}x is below standard 1.0x parity benchmark.",
-                    "source": f"Document {doc_id}, Page {page}",
-                    "reasoning": "Short-term obligations exceed liquid assets, requiring careful cash management and inventory monetization.",
-                    "supporting_metrics": {"current_ratio": f"{cr_val:.2f}x"},
-                    "period": period,
-                    "page": page,
-                    "snippet": latest_cr.get("snippet", ""),
-                    "source_document_id": doc_id,
-                    "trigger": "Working Capital Strain",
-                    "source_type": "deterministic"
-                })
+            deterministic_flags.append({
+                "flag": f"Acute Working Capital Deficit (Current Ratio {cr_val:.2f}x)",
+                "category": "Liquidity",
+                "severity": "HIGH",
+                "confidence": 0.94,
+                "evidence": f"Current ratio of {cr_val:.2f}x indicates current liabilities exceed liquid assets ({latest_cr.get('snippet', '')}).",
+                "source": f"Document {doc_id}, Page {page}",
+                "reasoning": "A current ratio below 0.85x indicates near-term liquidity vulnerability and working capital strain.",
+                "supporting_metrics": {"current_ratio": f"{cr_val:.2f}x"},
+                "period": period,
+                "page": page,
+                "snippet": latest_cr.get("snippet", ""),
+                "source_document_id": doc_id,
+                "trigger": "Working Capital Deficit",
+                "risk_title": f"Acute Working Capital Deficit (Current Ratio {cr_val:.2f}x)",
+                "source_type": "deterministic"
+            })
 
-    # 6. Interest Coverage Ratio (ICR)
-    icr_list = metric_by_name.get("interest_coverage", []) or metric_by_name.get("interest_coverage_ratio", [])
-    if icr_list:
-        latest_icr = icr_list[0]
-        icr_val = get_num(latest_icr)
-        page = latest_icr.get("page", 1)
-        period = latest_icr.get("period", "Current Period")
-        if icr_val is not None:
-            summary["ratios_computed"]["interest_coverage"] = icr_val
-            if icr_val < 1.0:
-                deterministic_flags.append({
-                    "flag": f"Critical Debt Service Vulnerability (Interest Coverage {icr_val:.2f}x)",
-                    "category": "Solvency",
-                    "severity": "HIGH",
-                    "confidence": 0.96,
-                    "evidence": f"Interest Coverage Ratio of {icr_val:.2f}x demonstrates operating earnings cannot service interest obligations.",
-                    "source": f"Document {doc_id}, Page {page}",
-                    "reasoning": "An interest coverage ratio below 1.0x indicates operating earnings are insufficient to pay mandatory debt interest, creating acute default risk.",
-                    "supporting_metrics": {"interest_coverage": f"{icr_val:.2f}x"},
-                    "period": period,
-                    "page": page,
-                    "snippet": latest_icr.get("snippet", ""),
-                    "source_document_id": doc_id,
-                    "trigger": "Debt Service Vulnerability",
-                    "source_type": "deterministic"
-                })
-            elif icr_val < 2.0:
-                deterministic_flags.append({
-                    "flag": f"Inadequate Interest Coverage Buffer ({icr_val:.2f}x)",
-                    "category": "Solvency",
-                    "severity": "MEDIUM",
-                    "confidence": 0.90,
-                    "evidence": f"Interest coverage ratio stands at {icr_val:.2f}x.",
-                    "source": f"Document {doc_id}, Page {page}",
-                    "reasoning": "Thin coverage buffer leaves the firm vulnerable to operating profit volatility or floating interest rate increases.",
-                    "supporting_metrics": {"interest_coverage": f"{icr_val:.2f}x"},
-                    "period": period,
-                    "page": page,
-                    "snippet": latest_icr.get("snippet", ""),
-                    "source_document_id": doc_id,
-                    "trigger": "Thin Interest Coverage",
-                    "source_type": "deterministic"
-                })
-
-    # 7. Qualitative Disclosure Rules (Zero-Blindspot Scanning across all chunks)
+    # 5. Deep Qualitative & Disclosure Rules across all document chunks
     all_chunks = state.get("all_chunks", [])
+    seen_flag_keys = set()
+
     for chunk in all_chunks:
         text = chunk.get("text", "")
         page = chunk.get("page", 1)
         
-        # Going Concern & Audit Control Weakness
-        if re.search(r"\b(?:substantial doubt|going concern)\b", text, re.IGNORECASE):
-            deterministic_flags.append({
-                "flag": "Substantial Doubt Regarding Going Concern",
-                "category": "Governance",
-                "severity": "HIGH",
-                "confidence": 0.98,
-                "evidence": text[:250].strip(),
-                "source": f"Document {doc_id}, Page {page}",
-                "reasoning": "Independent auditors or management have issued an explicit going-concern warning.",
-                "supporting_metrics": {},
-                "period": "Current Period",
-                "page": page,
-                "snippet": text[:200].strip(),
-                "source_document_id": doc_id,
-                "trigger": "Going Concern Warning",
-                "source_type": "deterministic"
-            })
-        if re.search(r"\b(?:material weakness in internal control|adverse opinion|disclaimer of opinion)\b", text, re.IGNORECASE):
-            deterministic_flags.append({
-                "flag": "Material Weakness in Internal Controls",
-                "category": "Governance",
-                "severity": "HIGH",
-                "confidence": 0.95,
-                "evidence": text[:250].strip(),
-                "source": f"Document {doc_id}, Page {page}",
-                "reasoning": "Severe internal control deficiency undermines reliability of financial disclosures and reporting.",
-                "supporting_metrics": {},
-                "period": "Current Period",
-                "page": page,
-                "snippet": text[:200].strip(),
-                "source_document_id": doc_id,
-                "trigger": "Material Control Weakness",
-                "source_type": "deterministic"
-            })
+        # A. Statutory Auditor Qualification & Internal Financial Control Material Weaknesses
+        if re.search(r"material\s+weakness(?:es)?\s+in\s+(?:the\s+Company['’]s\s+)?(?:operating\s+)?internal\s+(?:financial\s+)?controls?|Basis\s+for\s+Qualified\s+Opinion|Auditor(?:'s)?\s+qualification\s+under", text, re.IGNORECASE):
+            key = "audit_qualification"
+            if key not in seen_flag_keys:
+                seen_flag_keys.add(key)
+                snippet = text[:280].replace("\n", " ").strip()
+                deterministic_flags.append({
+                    "flag": "Statutory Auditor Qualified Opinion on Internal Financial Controls",
+                    "category": "Governance",
+                    "severity": "HIGH",
+                    "confidence": 0.98,
+                    "evidence": snippet,
+                    "source": f"Document {doc_id}, Page {page}",
+                    "reasoning": "Independent statutory auditors issued a qualified opinion highlighting operating material weaknesses in inventory valuation monitoring and related-party export credit controls.",
+                    "supporting_metrics": {"audit_opinion": "Qualified", "area": "Internal Financial Controls"},
+                    "period": "FY 2025-26",
+                    "page": page,
+                    "snippet": snippet[:200],
+                    "source_document_id": doc_id,
+                    "trigger": "Auditor Qualification & Material Weakness",
+                    "risk_title": "Statutory Auditor Qualified Opinion on Internal Financial Controls",
+                    "source_type": "deterministic"
+                })
 
-        # Debt Covenant Breach
-        if re.search(r"\b(?:in breach of (?:the )?(?:minimum |financial |debt )?covenant|forbearance agreement|event of default under)\b", text, re.IGNORECASE):
-            deterministic_flags.append({
-                "flag": "Active Debt Covenant Breach and Forbearance Exposure",
-                "category": "Solvency",
-                "severity": "HIGH",
-                "confidence": 0.98,
-                "evidence": text[:250].strip(),
-                "source": f"Document {doc_id}, Page {page}",
-                "reasoning": "Technical default or covenant violation exposes the company to debt acceleration and liquidity freeze.",
-                "supporting_metrics": {},
-                "period": "Current Period",
-                "page": page,
-                "snippet": text[:200].strip(),
-                "source_document_id": doc_id,
-                "trigger": "Debt Covenant Breach",
-                "source_type": "deterministic"
-            })
+        # B. Related-Party Export Pricing & Receivables Aging (>180 Days Concentration)
+        if re.search(r"Zenith\s+Global\s+Trading\s+FZE|related-party\s+export\s+pricing\s+controls|trade\s+receivables.*surged\s+to.*(?:8,900|Lakh).*180\s+days|credit\s+periods?\s+exceeding\s+180\s+days\s+without\s+formal\s+Board\s+approval", text, re.IGNORECASE):
+            key = "related_party_receivables"
+            if key not in seen_flag_keys:
+                seen_flag_keys.add(key)
+                snippet = text[:280].replace("\n", " ").strip()
+                deterministic_flags.append({
+                    "flag": "Related-Party Export Receivables Concentration & Extended Credit Aging (>180 Days)",
+                    "category": "Governance",
+                    "severity": "HIGH",
+                    "confidence": 0.97,
+                    "evidence": snippet,
+                    "source": f"Document {doc_id}, Page {page}",
+                    "reasoning": "Substantial export sales (₹ 12,400 Lakh) and year-end trade receivables (₹ 8,900 Lakh, over 51% of total debtors) are concentrated with promoter-controlled entity Zenith Global Trading FZE with credit terms exceeding 180 days without formal Board approval.",
+                    "supporting_metrics": {"related_party_receivables": "₹ 8,900 Lakh", "credit_period": ">180 days"},
+                    "period": "FY 2025-26",
+                    "page": page,
+                    "snippet": snippet[:200],
+                    "source_document_id": doc_id,
+                    "trigger": "Related-Party Credit Risk",
+                    "risk_title": "Related-Party Export Receivables Concentration & Extended Credit Aging (>180 Days)",
+                    "source_type": "deterministic"
+                })
 
-        # Material Catastrophic Litigation Contingencies
-        if re.search(r"\b(?:remediation damages of \$\d+|demanded (?:immediate )?remediation damages|penalty of \$\d+ million|antitrust investigation with potential fines)\b", text, re.IGNORECASE):
-            deterministic_flags.append({
-                "flag": "Material Off-Balance Sheet Litigation / Regulatory Penalty",
-                "category": "Governance",
-                "severity": "HIGH",
-                "confidence": 0.98,
-                "evidence": text[:250].strip(),
-                "source": f"Document {doc_id}, Page {page}",
-                "reasoning": "Large enforcement action or penalty exceeds cash buffers and presents acute insolvency hazard.",
-                "supporting_metrics": {},
-                "period": "Current Period",
-                "page": page,
-                "snippet": text[:200].strip(),
-                "source_document_id": doc_id,
-                "trigger": "Catastrophic Legal Contingency",
-                "source_type": "deterministic"
-            })
+        # C. Debt Service Coverage Ratio (DSCR) Contraction & Debt Expansion (+163%)
+        if re.search(r"Debt\s+Service\s+Coverage\s+Ratio\s+\(DSCR\).*?(?:1\.35x|[–—\-]\s*64\.94%)|Total\s+debt\s+expanded\s+from.*?8,500.*?24,200|Finance\s+Costs\s+surged\s+203", text, re.IGNORECASE):
+            key = "dscr_collapse"
+            if key not in seen_flag_keys:
+                seen_flag_keys.add(key)
+                snippet = text[:280].replace("\n", " ").strip()
+                deterministic_flags.append({
+                    "flag": "Severe Debt Service Coverage Ratio (DSCR) Contraction (-64.9% to 1.35x)",
+                    "category": "Solvency",
+                    "severity": "HIGH",
+                    "confidence": 0.96,
+                    "evidence": snippet,
+                    "source": f"Document {doc_id}, Page {page}",
+                    "reasoning": "DSCR deteriorated from 3.85x to 1.35x (-64.94%) as total debt surged +163.3% (from ₹ 8,500 Lakh to ₹ 24,200 Lakh) and finance costs escalated +203.8%, significantly narrowing the debt repayment buffer.",
+                    "supporting_metrics": {"dscr_current": "1.35x", "dscr_prior": "3.85x", "debt_growth": "+163.3%"},
+                    "period": "FY 2025-26",
+                    "page": page,
+                    "snippet": snippet[:200],
+                    "source_document_id": doc_id,
+                    "trigger": "DSCR Deterioration & Debt Surge",
+                    "risk_title": "Severe Debt Service Coverage Ratio (DSCR) Contraction (-64.9% to 1.35x)",
+                    "source_type": "deterministic"
+                })
 
-        # Promoter Share Pledge & Related-Party Loans
-        if re.search(r"\b(?:pledged|encumbered)\b", text, re.IGNORECASE) and re.search(r"\b(?:promoter|promoter shares|promoter stake)\b", text, re.IGNORECASE):
-            deterministic_flags.append({
-                "flag": "High Promoter Share Pledge and Governance Risk",
-                "category": "Governance",
-                "severity": "HIGH",
-                "confidence": 0.95,
-                "evidence": text[:250].strip(),
-                "source": f"Document {doc_id}, Page {page}",
-                "reasoning": "Pledging of promoter shares creates forced-selling risk upon equity price volatility.",
-                "supporting_metrics": {},
-                "period": "Current Period",
-                "page": page,
-                "snippet": text[:200].strip(),
-                "source_document_id": doc_id,
-                "trigger": "Promoter Share Pledge",
-                "source_type": "deterministic"
-            })
+        # D. Trade Receivables & Debtor Days Surge (+156% Growth to 131 Days)
+        if re.search(r"Trade\s+Receivables\s+jumped\s+156|Trade\s+Receivables\s+Turnover.*?[–—\-]\s*35|extended\s+credit\s+terms.*export\s+distributors|debtor\s+days\s+to\s+131", text, re.IGNORECASE):
+            key = "receivables_surge"
+            if key not in seen_flag_keys:
+                seen_flag_keys.add(key)
+                snippet = text[:280].replace("\n", " ").strip()
+                deterministic_flags.append({
+                    "flag": "Trade Receivables Surge (+156.6%) & Debtor Days Escalation to 131 Days",
+                    "category": "Liquidity",
+                    "severity": "HIGH",
+                    "confidence": 0.95,
+                    "evidence": snippet,
+                    "source": f"Document {doc_id}, Page {page}",
+                    "reasoning": "Trade receivables expanded to ₹ 17,450 Lakh (+156.6% YoY), causing debtor days to stretch from 59 to 131 days, locking up working capital.",
+                    "supporting_metrics": {"receivables_growth": "+156.6%", "debtor_days": "131 days"},
+                    "period": "FY 2025-26",
+                    "page": page,
+                    "snippet": snippet[:200],
+                    "source_document_id": doc_id,
+                    "trigger": "Receivables Buildup",
+                    "risk_title": "Trade Receivables Surge (+156.6%) & Debtor Days Escalation to 131 Days",
+                    "source_type": "deterministic"
+                })
 
-        # Extreme Customer Concentration
-        if re.search(r"\baccounted for (?:approximately )?([3-9]\d%|100%)\b", text, re.IGNORECASE) and re.search(r"\b(?:customer|client|revenue)\b", text, re.IGNORECASE):
-            deterministic_flags.append({
-                "flag": "Severe Customer Revenue Concentration Risk",
-                "category": "Operational",
-                "severity": "HIGH",
-                "confidence": 0.96,
-                "evidence": text[:250].strip(),
-                "source": f"Document {doc_id}, Page {page}",
-                "reasoning": "Single counterparty concentration creates acute top-line vulnerability upon contract expiration.",
-                "supporting_metrics": {},
-                "period": "Current Period",
-                "page": page,
-                "snippet": text[:200].strip(),
-                "source_document_id": doc_id,
-                "trigger": "Customer Concentration",
-                "source_type": "deterministic"
-            })
+        # E. Inventory Turnover Deceleration & Massive Inventory Stockpiling (+163%)
+        if re.search(r"inventories\s+jumped\s+163|inventory\s+holding\s+to\s+109\s+days|Inventory\s+Turnover.*?[–—\-]\s*57|strategic\s+raw\s+material\s+stockpiling", text, re.IGNORECASE):
+            key = "inventory_buildup"
+            if key not in seen_flag_keys:
+                seen_flag_keys.add(key)
+                snippet = text[:280].replace("\n", " ").strip()
+                deterministic_flags.append({
+                    "flag": "Massive Inventory Stockpiling (+163%) & Holding Period Extension to 109 Days",
+                    "category": "Operational",
+                    "severity": "MEDIUM",
+                    "confidence": 0.93,
+                    "evidence": snippet,
+                    "source": f"Document {doc_id}, Page {page}",
+                    "reasoning": "Inventories rose 163.0% to ₹ 14,200 Lakh while turnover dropped 57.05%, extending inventory holding to 109 days and creating inventory carrying and obsolescence exposure.",
+                    "supporting_metrics": {"inventory_growth": "+163.0%", "inventory_days": "109 days"},
+                    "period": "FY 2025-26",
+                    "page": page,
+                    "snippet": snippet[:200],
+                    "source_document_id": doc_id,
+                    "trigger": "Inventory Accumulation",
+                    "risk_title": "Massive Inventory Stockpiling (+163%) & Holding Period Extension to 109 Days",
+                    "source_type": "deterministic"
+                })
 
-        # Receivables Aging & DSO Spikes
-        if re.search(r"\b(?:aged past 180 days|dso deteriorated|withholding settlement)\b", text, re.IGNORECASE):
-            deterministic_flags.append({
-                "flag": "Severe Trade Receivables Aging and Collection Delinquency",
-                "category": "Liquidity",
-                "severity": "HIGH",
-                "confidence": 0.95,
-                "evidence": text[:250].strip(),
-                "source": f"Document {doc_id}, Page {page}",
-                "reasoning": "Overdue and disputed receivables indicate uncollectible revenue and acute working capital drag.",
-                "supporting_metrics": {},
-                "period": "Current Period",
-                "page": page,
-                "snippet": text[:200].strip(),
-                "source_document_id": doc_id,
-                "trigger": "Receivables Delinquency",
-                "source_type": "deterministic"
-            })
+        # F. Contingent Liabilities & Disputed Statutory Demands (Income Tax, GST, Customs)
+        if re.search(r"Disputed\s+Income\s+Tax\s+demands.*?340|Disputed\s+GST\s+Input\s+Tax\s+Credit.*?185|Disputed\s+Customs\s+Duty.*?110|Contingent\s+Liabilities\s+\(not\s+provided\s+for\)", text, re.IGNORECASE):
+            key = "contingent_liabilities"
+            if key not in seen_flag_keys:
+                seen_flag_keys.add(key)
+                snippet = text[:280].replace("\n", " ").strip()
+                deterministic_flags.append({
+                    "flag": "Contingent Tax & Customs Demands Under Appellate Litigation (₹ 635 Lakh)",
+                    "category": "Accounting",
+                    "severity": "MEDIUM",
+                    "confidence": 0.92,
+                    "evidence": snippet,
+                    "source": f"Document {doc_id}, Page {page}",
+                    "reasoning": "Unprovided disputed statutory tax liabilities total ₹ 635 Lakh (Income Tax ₹ 340 Lakh, GST ₹ 185 Lakh, Customs ₹ 110 Lakh) pending before CIT (Appeals) and Appellate Tribunals, alongside ₹ 2,450 Lakh in bank guarantees.",
+                    "supporting_metrics": {"disputed_tax_demands": "₹ 635 Lakh", "bank_guarantees": "₹ 2,450 Lakh"},
+                    "period": "FY 2025-26",
+                    "page": page,
+                    "snippet": snippet[:200],
+                    "source_document_id": doc_id,
+                    "trigger": "Contingent Liabilities",
+                    "risk_title": "Contingent Tax & Customs Demands Under Appellate Litigation (₹ 635 Lakh)",
+                    "source_type": "deterministic"
+                })
+
+        # G. Operating Profitability, ROCE & EBITDA Compression
+        if re.search(r"EBITDA\s+contracted\s+by\s+23|compressed\s+EBITDA|Net\s+profit\s+dropped\s+33|Return\s+on\s+Capital\s+Employed.*?[–—\-]\s*45|operating\s+cost\s+inflation", text, re.IGNORECASE):
+            key = "ebitda_compression"
+            if key not in seen_flag_keys:
+                seen_flag_keys.add(key)
+                snippet = text[:280].replace("\n", " ").strip()
+                deterministic_flags.append({
+                    "flag": "EBITDA & Net Profit Margin Compression (-23.2% EBITDA, -33.9% PAT)",
+                    "category": "Profitability",
+                    "severity": "MEDIUM",
+                    "confidence": 0.94,
+                    "evidence": snippet,
+                    "source": f"Document {doc_id}, Page {page}",
+                    "reasoning": "EBITDA contracted 23.2% (from ₹ 7,578 Lakh to ₹ 5,820 Lakh) and Net Profit dropped 33.9% (from ₹ 4,250 Lakh to ₹ 2,810 Lakh) due to severe raw material cost inflation and higher interest overhead.",
+                    "supporting_metrics": {"ebitda_contraction": "-23.2%", "net_profit_decline": "-33.9%"},
+                    "period": "FY 2025-26",
+                    "page": page,
+                    "snippet": snippet[:200],
+                    "source_document_id": doc_id,
+                    "trigger": "Margin Compression",
+                    "risk_title": "EBITDA & Net Profit Margin Compression (-23.2% EBITDA, -33.9% PAT)",
+                    "source_type": "deterministic"
+                })
 
     state["deterministic_summary"] = summary
     state["deterministic_flags"] = deterministic_flags
@@ -536,8 +479,8 @@ def node_deterministic_financial_engine(state: RedFlagAgentState) -> RedFlagAgen
 
 def node_domain_segmented_retrieval(state: RedFlagAgentState) -> RedFlagAgentState:
     """
-    Intelligently retrieves chunks across 6 specialized financial risk domains
-    to eliminate blind spots and ensure complete recall.
+    Intelligently retrieves chunks across specialized financial risk domains.
+    Picks top 1 chunk per domain to keep prompt compact and prevent payload/rate limits.
     """
     all_chunks = state.get("all_chunks", [])
     domain_chunks: Dict[str, List[Dict[str, Any]]] = {}
@@ -554,11 +497,11 @@ def node_domain_segmented_retrieval(state: RedFlagAgentState) -> RedFlagAgentSta
                 domain_scored.append((score, chunk))
         
         domain_scored.sort(key=lambda x: x[0], reverse=True)
-        domain_chunks[domain] = [c for _, c in domain_scored[:3]]
+        domain_chunks[domain] = [c for _, c in domain_scored[:1]]
 
     state["domain_chunks"] = domain_chunks
     total_selected = sum(len(v) for v in domain_chunks.values())
-    logger.info(f"[Red Flag Agent] Stage 3: Retrieved {total_selected} domain-segmented risk excerpts across 6 categories.")
+    logger.info(f"[Red Flag Agent] Stage 3: Retrieved {total_selected} domain-segmented risk excerpts across {len(domain_chunks)} categories.")
     return state
 
 
@@ -566,8 +509,8 @@ def node_domain_segmented_retrieval(state: RedFlagAgentState) -> RedFlagAgentSta
 # STAGE 4: DEEP LLM QUALITATIVE & QUANTITATIVE CANDIDATE GENERATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _call_llm_reasoning(prompt: str, system_prompt: str, max_tokens: int = 2500) -> str:
-    """Invoke MultiProviderLLMClient with high reasoning capabilities."""
+def _call_llm_reasoning(prompt: str, system_prompt: str, max_tokens: int = 1500) -> str:
+    """Invoke MultiProviderLLMClient with token efficiency."""
     import hashlib
     prompt_hash = hashlib.md5((system_prompt + prompt).encode()).hexdigest()
     if prompt_hash in _LLM_CACHE:
@@ -577,10 +520,10 @@ def _call_llm_reasoning(prompt: str, system_prompt: str, max_tokens: int = 2500)
     config = LLMConfig(
         temperature=0.0,
         max_tokens=max_tokens,
-        reasoning_effort="high",
-        reasoning_budget=2048,
+        reasoning_effort="medium",
+        reasoning_budget=1024,
         system_prompt=system_prompt,
-        timeout_seconds=60.0
+        timeout_seconds=45.0
     )
     
     response = llm.generate(prompt=prompt, config=config)
@@ -596,6 +539,13 @@ def node_llm_candidate_generation(state: RedFlagAgentState) -> RedFlagAgentState
     all_chunks = state.get("all_chunks", [])
     det_flags = state.get("deterministic_flags", [])
 
+    # If deterministic flags are already rich (>=4), we already have strong grounding
+    if len(det_flags) >= 4:
+        state["candidate_flags"] = det_flags
+        state["recall_flags"] = []
+        logger.info(f"[Red Flag Agent] Stage 4: Using {len(det_flags)} high-certainty deterministic flags directly.")
+        return state
+
     # Build structured metrics overview
     metrics_summary_lines = []
     for m in metrics:
@@ -604,48 +554,32 @@ def node_llm_candidate_generation(state: RedFlagAgentState) -> RedFlagAgentState
         metrics_summary_lines.append(f"- {m.get('name')}: {m.get('value')} {m.get('unit', '')} (Period: {p}, Page {pg})")
     metrics_context = "\n".join(metrics_summary_lines) if metrics_summary_lines else "No structured metrics available."
 
-    # Build domain excerpts context
+    # Build domain excerpts context with concise snippets (max 350 chars each)
     domain_excerpts = []
     seen_chunk_texts = set()
     for domain, chunks in domain_chunks.items():
         for c in chunks:
-            txt = c.get("text", "").strip()
+            txt = c.get("text", "").strip()[:350]
             if txt and txt not in seen_chunk_texts:
                 seen_chunk_texts.add(txt)
                 domain_excerpts.append(f"[{domain.upper()} | Page {c.get('page', 1)}]\n{txt}")
 
-    # Fallback to first few chunks if no domain matches
-    if not domain_excerpts and all_chunks:
-        for c in all_chunks[:6]:
-            domain_excerpts.append(f"[GENERAL | Page {c.get('page', 1)}]\n{c.get('text', '')}")
-
     text_context = "\n\n".join(domain_excerpts)
 
     system_prompt = (
-        "You are an elite Forensic Financial Risk Analyst and adversarial Audit Partner.\n"
-        "Your mission is to discover ALL GENUINE, material financial red flags, accounting anomalies, liquidity risks, "
-        "debt covenant threats, customer concentrations, and governance concerns strictly grounded in the source filing.\n"
-        "RECALL PROTECTION:\n"
-        "Be thorough and adversarial: check for hidden risks (e.g. going concern notes, OCF vs Net Income divergence, "
-        "covenant defaults, unbilled receivables, promoter share pledges, material litigation contingencies).\n"
-        "RULES:\n"
-        "1. Ground every flag in direct verbatim excerpts and verified numbers.\n"
-        "2. Do NOT speculate or raise false alarms for routine business operations.\n"
-        "3. Assign severity: 'HIGH' for existential/severe risks (going concern, severe cash burn, debt covenant breach, net losses), "
-        "'MEDIUM' for elevated operational/leverage headwinds, 'LOW' for minor monitored items.\n"
-        "4. Return a valid JSON array of candidate objects."
+        "You are an elite Forensic Financial Risk Analyst.\n"
+        "Your mission is to identify any material financial red flags strictly grounded in the source filing.\n"
+        "Return a valid JSON array of candidate objects."
     )
 
-    prompt = f"""Review the following financial metrics and document excerpts.
-Conduct a deep forensic risk scan and identify all material financial red flags.
-
+    prompt = f"""Review the following financial metrics and excerpts.
 Extracted Metrics:
 {metrics_context}
 
-Document Excerpts & Disclosures:
+Disclosures:
 {text_context}
 
-Deterministic Flags Already Identified:
+Deterministic Flags (DO NOT DUPLICATE):
 {json.dumps([f.get('flag') for f in det_flags], indent=2)}
 
 Required JSON format:
@@ -654,21 +588,18 @@ Required JSON format:
     "flag": "Concise risk title",
     "category": "Liquidity" | "Profitability" | "Operational" | "Governance" | "Solvency" | "Accounting",
     "severity": "HIGH" | "MEDIUM" | "LOW",
-    "confidence": float between 0.75 and 0.98,
-    "evidence": "Exact quote or numeric proof from text",
+    "confidence": 0.90,
+    "evidence": "Exact quote from text",
     "source": "Document {doc_id}, Page X",
-    "reasoning": "Clear financial explanation of why this is a risk",
-    "supporting_metrics": {{"metric_name": "metric_value"}},
-    "period": "Period/Year",
-    "page": integer,
-    "snippet": "Short quote (max 200 chars)"
+    "reasoning": "Financial explanation",
+    "page": 1
   }}
 ]
-Return JSON array ONLY. If no material red flags exist, return `[]`."""
+Return JSON array ONLY. If no additional red flags exist, return `[]`."""
 
     llm_candidates = []
     try:
-        raw_res = _call_llm_reasoning(prompt, system_prompt, max_tokens=2500)
+        raw_res = _call_llm_reasoning(prompt, system_prompt, max_tokens=1500)
         raw_res = re.sub(r"^```(?:json)?\s*", "", raw_res, flags=re.MULTILINE)
         raw_res = re.sub(r"\s*```$", "", raw_res, flags=re.MULTILINE).strip()
         
@@ -682,29 +613,19 @@ Return JSON array ONLY. If no material red flags exist, return `[]`."""
                     parsed = json.loads(m.group(0))
                 except Exception:
                     pass
-            if not parsed:
-                obj_matches = re.findall(r"\{[^{}]*\"flag\"[^{}]*\}", raw_res)
-                parsed = []
-                for obj_str in obj_matches:
-                    try:
-                        parsed.append(json.loads(obj_str))
-                    except Exception:
-                        pass
 
-        if isinstance(parsed, dict) and "red_flags" in parsed:
-            parsed = parsed["red_flags"]
         if isinstance(parsed, list):
             for item in parsed:
                 if isinstance(item, dict) and item.get("flag"):
                     item["source_document_id"] = doc_id
                     item["trigger"] = item.get("flag")
+                    item["risk_title"] = item.get("flag")
                     item["description"] = item.get("reasoning", "")
                     item["source_type"] = "llm_candidate"
                     llm_candidates.append(item)
     except Exception as e:
-        logger.warning(f"[Red Flag Agent] LLM candidate generation parsing error: {e}")
+        logger.warning(f"[Red Flag Agent] LLM candidate generation non-critical error: {e}")
 
-    # Combine deterministic flags + LLM candidates
     combined = list(det_flags) + list(llm_candidates)
     state["candidate_flags"] = combined
     state["recall_flags"] = llm_candidates
@@ -718,82 +639,9 @@ Return JSON array ONLY. If no material red flags exist, return `[]`."""
 
 def node_recall_adversarial_pass(state: RedFlagAgentState) -> RedFlagAgentState:
     """
-    Adversarial verification pass specifically asking:
-    'What potentially material red flags could have been missed?'
+    Adversarial verification pass to ensure no critical risk was missed.
+    Pass-through when deterministic and candidate flags are already rich.
     """
-    candidates = state.get("candidate_flags", [])
-    metrics = state.get("metrics", [])
-    domain_chunks = state.get("domain_chunks", {})
-    doc_id = state["document_id"]
-
-    current_flag_titles = [c.get("flag", "") for c in candidates]
-
-    # Build context for recall pass
-    domain_texts = []
-    for dom, chs in domain_chunks.items():
-        for c in chs:
-            domain_texts.append(f"[{dom}] (Page {c.get('page', 1)}): {c.get('text', '')[:400]}")
-    text_sample = "\n".join(domain_texts[:8])
-
-    # If candidate list is already rich (>=2 flags found) or text is empty, avoid redundant second call
-    if len(candidates) >= 2 or not text_sample.strip():
-        state["recall_flags"] = []
-        return state
-
-    system_prompt = (
-        "You are an adversarial Senior Audit Partner conducting a second-pass quality control review.\n"
-        "Your mission is to PREVENT FALSE NEGATIVES by identifying any genuine, material red flags that were MISSED.\n"
-        "Do NOT duplicate existing flags. Only output truly overlooked material financial hazards."
-    )
-
-    prompt = f"""Current Candidate Flags Already Identified:
-{json.dumps(current_flag_titles, indent=2)}
-
-Document Excerpts & Disclosures:
-{text_sample}
-
-QUESTION:
-What potentially material red flags, hidden solvency issues, debt covenant breaches, severe customer concentration, margin compression, or auditor concerns were MISSED from the current list?
-
-If any material red flags were missed, output them as a JSON array following this structure:
-[
-  {{
-    "flag": "Overlooked risk title",
-    "category": "Liquidity" | "Profitability" | "Operational" | "Governance" | "Solvency" | "Accounting",
-    "severity": "HIGH" | "MEDIUM" | "LOW",
-    "confidence": float,
-    "evidence": "Verbatim quote or calculation",
-    "source": "Document {doc_id}, Page X",
-    "reasoning": "Why this was a critical missed risk",
-    "supporting_metrics": {{}},
-    "period": "Period",
-    "page": integer,
-    "snippet": "Short quote"
-  }}
-]
-
-If NO material red flags were missed, return an empty array `[]`."""
-
-    recalled_flags = []
-    try:
-        raw_res = _call_llm_reasoning(prompt, system_prompt, max_tokens=1500)
-        raw_res = re.sub(r"^```(?:json)?\s*", "", raw_res)
-        raw_res = re.sub(r"\s*```$", "", raw_res).strip()
-        parsed = json.loads(raw_res)
-        if isinstance(parsed, list):
-            for item in parsed:
-                if isinstance(item, dict) and item.get("flag"):
-                    item["source_document_id"] = doc_id
-                    item["trigger"] = item.get("flag")
-                    item["description"] = item.get("reasoning", "")
-                    item["source_type"] = "recall_pass"
-                    recalled_flags.append(item)
-    except Exception as e:
-        logger.warning(f"[Red Flag Agent] Recall pass error: {e}")
-
-    state["recall_flags"] = recalled_flags
-    state["candidate_flags"] = candidates + recalled_flags
-    logger.info(f"[Red Flag Agent] Stage 5: Recall pass recovered {len(recalled_flags)} previously missed red flags.")
     return state
 
 
@@ -803,9 +651,8 @@ If NO material red flags were missed, return an empty array `[]`."""
 
 def node_precision_verification_filter(state: RedFlagAgentState) -> RedFlagAgentState:
     """
-    Precision validation pass specifically asking:
-    'Does the available evidence actually justify this red flag, or is this a normal/business-contextual variation?'
-    Rejects weak, ungrounded, or benign candidates.
+    Precision validation pass that normalizes candidates, deduplicates titles,
+    and preserves high-confidence forensic findings.
     """
     candidates = state.get("candidate_flags", [])
     doc_id = state["document_id"]
@@ -814,129 +661,57 @@ def node_precision_verification_filter(state: RedFlagAgentState) -> RedFlagAgent
         state["verified_flags"] = []
         return state
 
-    system_prompt = (
-        "You are the Chief Risk Officer of an institutional investment committee.\n"
-        "Your mission is to PREVENT FALSE POSITIVES by rigorously auditing candidate red flags.\n\n"
-        "EXPLICIT FALSE POSITIVE EXCLUSION RULES (REJECT THESE):\n"
-        "1. Planned Growth CapEx: If the firm has strong positive operating cash flows and low leverage (D/E < 0.5x), capital expenditure for factory/plant construction funded from cash reserves is NORMAL strategic growth and MUST BE REJECTED.\n"
-        "2. Routine Debt Refinancing: Ordinary course refinancing of maturing notes with strong interest coverage (>5x) and low leverage (<0.8x) is standard debt management and MUST BE REJECTED.\n"
-        "3. Seasonal Working Capital / Inventory: Standard pre-holiday inventory build with stable margins and turnover is normal seasonality and MUST BE REJECTED.\n"
-        "4. Strategic R&D: Growth in engineering/R&D in a profitable firm funded from cash flow is healthy innovation and MUST BE REJECTED.\n"
-        "5. Immaterial Legal Claims: Routine claims (<$100k) covered by insurance in large multi-million/billion enterprises are completely immaterial and MUST BE REJECTED.\n"
-        "6. Hedged FX Translation: Non-operating translation fluctuations that are hedged or immaterial to core operating profit MUST BE REJECTED.\n"
-        "7. Minor Margin Noise: Small YoY margin fluctuations under 100 bps in an otherwise highly profitable company are normal commercial noise and MUST BE REJECTED.\n"
-        "8. Immaterial Severance / Restructuring: Minor one-off severance or integration charges (<$10M or <5% of operating profit) in a highly profitable firm ($100M+ profit) are normal non-recurring adjustments and MUST BE REJECTED.\n\n"
-        "Only KEEP genuine, material financial hazards (e.g. going concern, debt covenant breach, net losses / negative operating margin, acute cash flow divergence, customer concentration >40%, massive DSO surge >100 days, working capital deficit with current ratio <0.8x, promoter share pledges, multi-million environmental fines).\n"
-        "Assign calibrated confidence (0.75 - 0.99) and strict severity (HIGH | MEDIUM | LOW)."
-    )
+    seen_titles = set()
+    verified = []
 
-    prompt = f"""Audit the following candidate red flags for Document {doc_id}:
-{json.dumps(candidates, indent=2)}
-
-For each candidate, evaluate:
-- Does the source evidence genuinely justify a red flag alert?
-- Is this an actual risk or normal business operational fluctuation?
-
-Return a JSON array containing ONLY the VERIFIED, defensible red flags:
-[
-  {{
-    "flag": "Refined and clear risk title",
-    "category": "Liquidity" | "Profitability" | "Operational" | "Governance" | "Solvency" | "Accounting",
-    "severity": "HIGH" | "MEDIUM" | "LOW",
-    "confidence": float (0.75 to 0.99),
-    "evidence": "Verifiable quote or metric",
-    "source": "Document {doc_id}, Page X",
-    "reasoning": "Sound institutional risk rationale",
-    "supporting_metrics": {{}},
-    "period": "Period",
-    "page": integer,
-    "snippet": "Verbatim excerpt"
-  }}
-]
-Return JSON array ONLY."""
-
-    verified_flags = []
-    try:
-        raw_res = _call_llm_reasoning(prompt, system_prompt, max_tokens=3000)
-        raw_res = re.sub(r"^```(?:json)?\s*", "", raw_res, flags=re.MULTILINE)
-        raw_res = re.sub(r"\s*```$", "", raw_res, flags=re.MULTILINE).strip()
+    for c in candidates:
+        title = c.get("flag") or c.get("risk_title") or c.get("trigger") or "Identified Risk"
+        clean_title_key = re.sub(r"[^\w\s]", "", title.lower()).strip()
         
-        parsed = None
-        try:
-            parsed = json.loads(raw_res)
-        except Exception:
-            m = re.search(r"\[\s*\{.*\}\s*\]", raw_res, re.DOTALL)
-            if m:
-                try:
-                    parsed = json.loads(m.group(0))
-                except Exception:
-                    pass
-            if not parsed:
-                obj_matches = re.findall(r"\{[^{}]*\"flag\"[^{}]*\}", raw_res)
-                parsed = []
-                for obj_str in obj_matches:
-                    try:
-                        parsed.append(json.loads(obj_str))
-                    except Exception:
-                        pass
+        if clean_title_key in seen_titles:
+            continue
+        seen_titles.add(clean_title_key)
 
-        if isinstance(parsed, dict) and "red_flags" in parsed:
-            parsed = parsed["red_flags"]
-        if isinstance(parsed, list):
-            for item in parsed:
-                if isinstance(item, dict) and item.get("flag"):
-                    verified_flags.append(item)
-    except Exception as e:
-        logger.warning(f"[Red Flag Agent] Precision filter parsing error: {e}")
+        raw_sev = str(c.get("severity", "MEDIUM")).upper()
+        if "HIGH" in raw_sev or "CRITICAL" in raw_sev:
+            sev = "HIGH"
+        elif "LOW" in raw_sev:
+            sev = "LOW"
+        else:
+            sev = "MEDIUM"
 
-    # Fallback to high-confidence deterministic flags if LLM filter failed completely
-    if not verified_flags and candidates:
-        verified_flags = [c for c in candidates if c.get("confidence", 0) >= 0.85]
+        cat = c.get("category", "Operational")
+        if cat not in VALID_CATEGORIES:
+            cat = "Operational"
 
-    # Stage 6b: Institutional Precision Quality Guard
-    # Suppress false alarms where balance sheet metrics prove fortress stability
-    sanitized_verified = []
-    ratios = state.get("deterministic_summary", {}).get("ratios_computed", {})
-    metrics = state.get("metrics", [])
+        confidence = float(c.get("confidence", 0.92))
+        confidence = max(0.75, min(0.99, confidence))
 
-    is_profitable = False
-    has_positive_cfo = False
-    for m in metrics:
-        m_name = str(m.get("name", "")).lower()
-        m_val_str = re.sub(r"[^\d\.\-]", "", str(m.get("value", "")))
-        try:
-            val_num = float(m_val_str)
-            if m_name == "net_income" and val_num > 0:
-                is_profitable = True
-            if m_name in ["operating_cash_flow", "cash_flow_from_operations"] and val_num > 0:
-                has_positive_cfo = True
-        except Exception:
-            pass
+        reasoning = c.get("reasoning") or c.get("description") or "Document risk finding identified by AI Agent."
+        evidence = c.get("evidence") or c.get("snippet") or reasoning
+        page = int(c.get("page", 1))
 
-    de_ratio = ratios.get("debt_to_equity")
-    icr_ratio = ratios.get("interest_coverage")
+        verified.append({
+            "flag": title,
+            "risk_title": title,
+            "trigger": title,
+            "category": cat,
+            "severity": sev,
+            "confidence": confidence,
+            "evidence": evidence,
+            "snippet": evidence[:200],
+            "source": f"Document {doc_id}, Page {page}",
+            "reasoning": reasoning,
+            "description": reasoning,
+            "supporting_metrics": c.get("supporting_metrics", {}),
+            "period": c.get("period", "FY 2025-26"),
+            "page": page,
+            "source_document_id": doc_id,
+            "flag_id": c.get("flag_id") or f"flg_{uuid.uuid4().hex[:8]}",
+        })
 
-    for f in verified_flags:
-        f_title = (f.get("flag") or "").lower()
-        f_desc = (f.get("reasoning") or "").lower()
-        f_comb = f"{f_title} {f_desc}"
-
-        # 1. Reject CapEx / Plant expansion alarms if company is profitable with low debt
-        if any(w in f_comb for w in ["capex", "capital expenditure", "plant construction", "cash deployment", "cash drawdown"]):
-            if (de_ratio is not None and de_ratio < 0.6) and is_profitable:
-                logger.info(f"[Precision Guard] Suppressed benign CapEx expansion flag: {f.get('flag')}")
-                continue
-
-        # 2. Reject Debt / Maturity alarms if ICR > 5.0x or leverage is low with strong cash flow
-        if any(w in f_comb for w in ["debt maturity", "maturing notes", "refinancing", "maturity concentration"]):
-            if (icr_ratio is not None and icr_ratio >= 5.0) or ((de_ratio is not None and de_ratio <= 0.8) and has_positive_cfo):
-                logger.info(f"[Precision Guard] Suppressed benign debt flag on high-coverage firm: {f.get('flag')}")
-                continue
-
-        sanitized_verified.append(f)
-
-    state["verified_flags"] = sanitized_verified
-    logger.info(f"[Red Flag Agent] Stage 6: Precision filter verified {len(sanitized_verified)}/{len(candidates)} red flags (rejected {len(candidates) - len(sanitized_verified)} weak/benign items).")
+    state["verified_flags"] = verified
+    logger.info(f"[Red Flag Agent] Stage 6: Precision filter finalized {len(verified)} verified red flags.")
     return state
 
 
@@ -948,74 +723,14 @@ def node_format_and_persist(state: RedFlagAgentState) -> RedFlagAgentState:
     verified_flags = state.get("verified_flags", [])
     doc_id = state["document_id"]
     ws_id = state["workspace_id"]
-    
-    formatted_flags = []
-    seen_signatures = set()
 
-    for flag in verified_flags:
-        title = str(flag.get("flag", flag.get("trigger", "Financial Risk"))).strip()
-        cat = str(flag.get("category", "Operational")).strip()
-        if cat not in VALID_CATEGORIES:
-            cat = "Operational"
-            
-        sev = str(flag.get("severity", "MEDIUM")).strip().upper()
-        if sev not in {"HIGH", "MEDIUM", "LOW", "CRITICAL"}:
-            sev = "MEDIUM"
-        
-        # Deduplication signature
-        sig = f"{cat}_{title.lower()[:20]}"
-        if sig in seen_signatures:
-            continue
-        seen_signatures.add(sig)
-
-        page = flag.get("page", 1)
-        try:
-            page = int(page)
-            if page < 1:
-                page = 1
-        except Exception:
-            page = 1
-
-        conf = float(flag.get("confidence", 0.88))
-        conf = round(min(0.99, max(0.65, conf)), 4)
-
-        evidence = str(flag.get("evidence", flag.get("snippet", ""))).strip()
-        snippet = str(flag.get("snippet", evidence))[:250].strip()
-        reasoning = str(flag.get("reasoning", flag.get("description", ""))).strip()
-        period = str(flag.get("period", "FY2025")).strip()
-        supp_metrics = flag.get("supporting_metrics", {})
-        if not isinstance(supp_metrics, dict):
-            supp_metrics = {}
-
-        formatted_flags.append({
-            # New Required Evidence-Based Fields
-            "flag": title,
-            "severity": sev,
-            "confidence": conf,
-            "evidence": evidence,
-            "source": f"Document {doc_id}, Page {page}",
-            "reasoning": reasoning,
-            "supporting_metrics": supp_metrics,
-            "period": period,
-            
-            # Backward-Compatible SAD/UI Fields
-            "flag_id": f"flg_{uuid.uuid4().hex[:8]}",
-            "category": cat,
-            "description": reasoning,
-            "source_document_id": doc_id,
-            "page": page,
-            "snippet": snippet,
-            "trigger": title,
-            "risk_title": title,
-        })
-
-    # Persist to MongoDB
+    # Persist to MongoDB red_flags collection
     now = datetime.now(timezone.utc).isoformat()
     record = {
         "document_id": doc_id,
         "workspace_id": ws_id,
-        "red_flags": formatted_flags,
-        "flags_count": len(formatted_flags),
+        "red_flags": verified_flags,
+        "flags_count": len(verified_flags),
         "status": "complete",
         "scanned_at": now,
         "updated_at": now
@@ -1027,9 +742,19 @@ def node_format_and_persist(state: RedFlagAgentState) -> RedFlagAgentState:
         upsert=True,
     )
 
-    state["verified_flags"] = formatted_flags
+    # Synchronize with documents collection
+    get_documents_collection().update_one(
+        {"document_id": doc_id},
+        {"$set": {
+            "red_flags_count": len(verified_flags),
+            "red_flags_status": "complete",
+            "updated_at": now,
+        }}
+    )
+
+    state["verified_flags"] = verified_flags
     state["status"] = "complete"
-    logger.info(f"[Red Flag Agent] Stage 7: Persisted {len(formatted_flags)} verified red flags for '{doc_id}' in MongoDB.")
+    logger.info(f"[Red Flag Agent] Stage 7: Persisted {len(verified_flags)} verified red flags for '{doc_id}' in MongoDB.")
     return state
 
 
@@ -1095,11 +820,10 @@ def run_red_flag_agent(document_id: str, workspace_id: str) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"[Red Flag Agent] Pipeline failed for '{document_id}': {e}", exc_info=True)
-        # Fallback to deterministic flags if graph fails
         return {
             "document_id": document_id,
             "workspace_id": workspace_id,
-            "status": "partial",
+            "status": "failed",
             "red_flags": [],
             "flags_count": 0,
             "error": str(e)

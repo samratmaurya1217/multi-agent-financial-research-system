@@ -780,7 +780,10 @@ export function ReportsPage() {
                         No filings uploaded in this workspace yet.
                       </p>
                     ) : (
-                      <div className="max-h-36 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-slate-200 bg-slate-50 custom-scrollbar">
+                      <div
+                        tabIndex={0}
+                        className="max-h-40 overflow-y-scroll filings-scroller overscroll-contain space-y-1.5 p-2 rounded-xl border border-slate-200 bg-slate-50 pr-2 focus:outline-hidden"
+                      >
                         {workspaceDocs.map((doc) => {
                           const isChecked = selectedDocIds.includes(doc.id);
                           return (

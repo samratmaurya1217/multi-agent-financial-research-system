@@ -138,6 +138,9 @@ async def add_cors_headers_always(request, call_next):
         response.headers["Access-Control-Expose-Headers"] = "Content-Disposition, Content-Length, Content-Type, X-Report-Id"
     return response
 
+from app.health import router as health_router
+app.include_router(health_router)
+
 # ─── Startup ─────────────────────────────────────────────────────────────────
 @app.on_event("startup")
 def on_startup():

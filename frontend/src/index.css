@@ -41,15 +41,47 @@ body {
 
 /* Hide scrollbars globally across all elements while keeping them fully scrollable */
 html, body, #root, * {
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 *::-webkit-scrollbar {
-  display: none !important;
-  width: 0px !important;
-  height: 0px !important;
-  background: transparent !important;
+  display: none;
+  width: 0px;
+  height: 0px;
+  background: transparent;
+}
+
+/* Dedicated visible scrollbar for interactive lists like Included Filings */
+.visible-scrollbar,
+.filings-scroller {
+  scrollbar-width: thin !important;
+  scrollbar-color: #94a3b8 #f1f5f9 !important;
+  -ms-overflow-style: auto !important;
+}
+
+.visible-scrollbar::-webkit-scrollbar,
+.filings-scroller::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.visible-scrollbar::-webkit-scrollbar-track,
+.filings-scroller::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+  border-radius: 9999px !important;
+}
+
+.visible-scrollbar::-webkit-scrollbar-thumb,
+.filings-scroller::-webkit-scrollbar-thumb {
+  background: #94a3b8 !important;
+  border-radius: 9999px !important;
+}
+
+.visible-scrollbar::-webkit-scrollbar-thumb:hover,
+.filings-scroller::-webkit-scrollbar-thumb:hover {
+  background: #64748b !important;
 }
 
 /* Selection */
