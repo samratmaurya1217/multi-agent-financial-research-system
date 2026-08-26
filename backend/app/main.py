@@ -21,9 +21,9 @@ load_dotenv(dotenv_path=_env_path, override=False)
 
 import bcrypt
 import jwt
+import threading
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Header, Depends, BackgroundTasks
 from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 # Set telemetry off before any heavy imports
@@ -74,68 +74,60 @@ if cors_origins_env:
 
 # NOTE: When allow_credentials=True, browsers do NOT treat "*" as covering
 # the Authorization header — it must be listed explicitly.
-_ALLOW_HEADERS = [
-    "authorization",
-    "Authorization",
-    "content-type",
-    "Content-Type",
-    "accept",
-    "Accept",
-    "origin",
-    "Origin",
-    "x-requested-with",
-    "X-Requested-With",
-    "cache-control",
-    "Cache-Control",
-    "pragma",
-    "Pragma",
-    "x-workspace-id",
-    "X-Workspace-Id",
-]
+_ALLOW_HEADERS_STR = "authorization, content-type, accept, origin, x-requested-with, cache-control, pragma, x-workspace-id"
+_ALLOW_METHODS_STR = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+_EXPOSE_HEADERS_STR = "Content-Disposition, Content-Length, Content-Type, X-Report-Id"
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app",
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
-    allow_headers=_ALLOW_HEADERS,
-    expose_headers=["Content-Disposition", "Content-Length", "Content-Type", "X-Report-Id"],
-)
+def _is_trusted_origin(origin: str) -> bool:
+    """Check if the origin is trusted for CORS."""
+    if not origin:
+        return False
+    return any(pattern in origin for pattern in (
+        "onrender.com", "vercel.app", "localhost", "127.0.0.1",
+    ))
+
+def _set_cors_headers(response, origin: str):
+    """Attach CORS headers to a response for a trusted origin."""
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = _ALLOW_METHODS_STR
+    response.headers["Access-Control-Allow-Headers"] = _ALLOW_HEADERS_STR
+    response.headers["Access-Control-Expose-Headers"] = _EXPOSE_HEADERS_STR
+    # Cache preflight for 24h — drastically reduces OPTIONS requests in production
+    response.headers["Access-Control-Max-Age"] = "86400"
 
 @app.middleware("http")
-async def add_cors_headers_always(request, call_next):
+async def cors_middleware(request, call_next):
+    """
+    Single hardened CORS middleware. Replaces both FastAPI CORSMiddleware and
+    the previous custom middleware to eliminate ordering conflicts.
+    Always attaches headers for trusted origins — even on 500/502/504 errors —
+    so browsers never block responses due to missing CORS headers.
+    """
     origin = request.headers.get("origin", "")
-    is_trusted = bool(
-        origin and (
-            "onrender.com" in origin
-            or "vercel.app" in origin
-            or "localhost" in origin
-            or "127.0.0.1" in origin
-        )
-    )
+    trusted = _is_trusted_origin(origin)
 
-    if request.method == "OPTIONS":
+    # Fast-path: preflight OPTIONS — respond immediately without hitting routes
+    if request.method == "OPTIONS" and trusted:
         from fastapi.responses import Response
         response = Response(status_code=200)
-    else:
-        try:
-            response = await call_next(request)
-        except Exception as exc:
-            logger.error(f"Unhandled exception in request: {exc}", exc_info=True)
-            from fastapi.responses import JSONResponse
-            response = JSONResponse(
-                status_code=500,
-                content={"detail": "An internal server error occurred. Please try again."}
-            )
+        _set_cors_headers(response, origin)
+        return response
 
-    if is_trusted:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
-        # Explicit header list — wildcards don't cover Authorization with credentials:include
-        response.headers["Access-Control-Allow-Headers"] = ", ".join(_ALLOW_HEADERS)
-        response.headers["Access-Control-Expose-Headers"] = "Content-Disposition, Content-Length, Content-Type, X-Report-Id"
+    # Normal request processing
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        logger.error(f"Unhandled exception in request: {exc}", exc_info=True)
+        from fastapi.responses import JSONResponse
+        response = JSONResponse(
+            status_code=500,
+            content={"detail": "An internal server error occurred. Please try again."}
+        )
+
+    # Always attach CORS headers for trusted origins
+    if trusted:
+        _set_cors_headers(response, origin)
     return response
 
 from app.health import router as health_router
@@ -686,7 +678,6 @@ def _run_document_pipeline_background(doc_id: str, ws_id: str, file_path: str, f
 @app.post("/documents")
 @app.post("/upload")
 async def upload_document_sad(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     workspace_id: Optional[str] = Form(None),
     user: dict = Depends(get_current_user)
@@ -766,8 +757,15 @@ async def upload_document_sad(
         {"$addToSet": {"document_manifest": doc_id}, "$set": {"updated_at": now}}
     )
 
-    # Kick off the full pipeline (indexing → extraction → red flags) in background
-    background_tasks.add_task(_run_document_pipeline_background, doc_id, ws_id, file_path, file.filename)
+    # Kick off the full pipeline (indexing → extraction → red flags) in a separate
+    # OS thread so it doesn't block the Uvicorn event loop on Render's single worker
+    pipeline_thread = threading.Thread(
+        target=_run_document_pipeline_background,
+        args=(doc_id, ws_id, file_path, file.filename),
+        daemon=True,
+        name=f"pipeline-{doc_id}"
+    )
+    pipeline_thread.start()
 
     return _strip_mongo(doc_meta)
 

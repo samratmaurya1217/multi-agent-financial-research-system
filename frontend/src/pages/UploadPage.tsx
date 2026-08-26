@@ -109,6 +109,11 @@ export function UploadPage() {
   }, []);
 
   const pollAgentStatus = async (docId: string, filename: string, attempt: number = 1) => {
+    // Exponential backoff: 5s → 8s → 12s → 15s (capped) on success path
+    const successDelay = Math.min(5000 + (attempt - 1) * 3000, 15000);
+    // Error backoff: 5s → 10s → 20s → 30s (capped)
+    const errorDelay = Math.min(5000 * Math.pow(1.5, attempt - 1), 30000);
+
     try {
       const [ext, rf] = await Promise.all([
         getDocumentExtraction(docId).catch(() => null),
@@ -155,19 +160,19 @@ export function UploadPage() {
         )
       );
 
-      if (!isAllDone && attempt < 30) {
+      if (!isAllDone && attempt < 20) {
         pollTimers.current[docId] = setTimeout(() => {
           pollAgentStatus(docId, filename, attempt + 1);
-        }, 2500);
+        }, successDelay);
       } else {
         delete pollTimers.current[docId];
       }
     } catch (err) {
       console.warn("Polling status error:", err);
-      if (attempt < 20) {
+      if (attempt < 15) {
         pollTimers.current[docId] = setTimeout(() => {
           pollAgentStatus(docId, filename, attempt + 1);
-        }, 3000);
+        }, errorDelay);
       }
     }
   };
